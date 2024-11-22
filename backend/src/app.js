@@ -23,12 +23,15 @@ mongoose
   .catch((err) => console.error('MongoDB connection error:', err));
 
 // Define a User Schema
+// 
 const userSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true },
   name: { type: String, required: true },
   username: { type: String, required: true, unique: true },
 });
 
+// whenever the user collection is converted to a json to be retrieved on the client side
+// these entries are inherently deleted, this saves the user data to be exploited through scam requests
 userSchema.set('toJSON', {
   transform: (_, ret) => {
     delete ret.email;
@@ -38,6 +41,10 @@ userSchema.set('toJSON', {
   },
 });
 
+
+
+// this is to connect  passport-local-mongoose to the mongoose schema.
+// this automatically handles and implements passport-local-strategy, encryption(salting & hashing) and session management.
 userSchema.plugin(passportLocalMongoose);
 
 
@@ -45,6 +52,8 @@ userSchema.plugin(passportLocalMongoose);
 const User = mongoose.model('User', userSchema);
 
 // Set up session store
+// this saves the session object in our database.
+// this functionality is provided by connect.mongo.
 const sessionStore = MongoStore.create({
   mongoUrl: process.env.MONGO_URI || 'mongodb://localhost:27017/yourDB',
   collectionName: 'sessions',
@@ -63,19 +72,40 @@ app.use(
   })
 );
 
-// Initialize Passport
+// Initialize Passport, it prepares the express app to use passport for authentication.
 app.use(passport.initialize());
+// it is a middle-ware of passport-session, it is used to allow express to store and retrieve user information through session using cookies.
 app.use(passport.session());
 
-// Configure Passport to use User model
+// `passport.use(User.createStrategy())` 
+// This configures Passport to use the local authentication strategy, which is typically based on a username (or email) 
+// and password. `createStrategy()` is a method provided by `passport-local-mongoose` to automatically set up the local 
+// authentication strategy using the `username` and `password` fields in the User model. It simplifies handling user login. 
+// It will authenticate a user by checking the username and password against what is stored in the database
 passport.use(User.createStrategy());
+// `passport.serializeUser(User.serializeUser())` 
+// This method tells Passport how to serialize user data into the session. Serialization is the process of saving the user 
+// information (usually an ID) into the session, so that it can be used across multiple requests. 
+// In this case, `User.serializeUser()` will serialize the user by saving the user’s ID (or another identifying field) into the session.
+// it initializes a session, for example whenever the user logs in or register.
 passport.serializeUser(User.serializeUser());
+// it parses the session 
+// `passport.deserializeUser(User.deserializeUser())` 
+// This method is used to deserialize the user data from the session and restore the full user object. It is the reverse 
+// process of serialization. Every time a request is made, Passport will call `deserializeUser()` to retrieve the full user 
+// object from the session (usually by looking up the user’s ID in the database). 
+// `User.deserializeUser()` will take the serialized data (e.g., user ID) and use it to find the full user object from the database.
 passport.deserializeUser(User.deserializeUser());
 
-// Routes
 
+
+
+
+
+
+// Routes
 app.get('/check-username', async (req, res) => {
-  const { username } = req.query;
+  const { username } = req.body;
 
   try {
     // Validate input length
@@ -98,7 +128,7 @@ app.get('/check-username', async (req, res) => {
 
 // Endpoint to check email availability
 app.get('/check-email', async (req, res) => {
-  const { email } = req.query;
+  const { email } = req.body;
 
   try {
     // Basic email format validation
@@ -108,8 +138,8 @@ app.get('/check-email', async (req, res) => {
     }
 
     // Check database for existing email
-    const existingUser = await User.findOne({ email });
-    if (existingUser) {
+    const existingemail = await User.findOne({ email });
+    if (existingemail) {
       return res.status(409).json({ message: 'Email is already taken.' });
     }
 
@@ -152,7 +182,7 @@ app.post('/register', async (req, res) => {
 //login middle ware
 const loginMiddleware = (req, res, next) => {
   // Use passport's authenticate method with the 'local' strategy
-  passport.authenticate('local', (err, user, info) => {
+  passport.authenticate('local', (err, user, info) => {      // (.authenticate) it is a method of passport-local-mongoose.
     if (err) {
       return res.status(500).send({ message: 'Error logging in', error: err.message });
     }
