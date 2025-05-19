@@ -1,0 +1,31 @@
+# Node modules (both frontend and backend)
+frontend/node_modules/
+backend/node_modules/
+
+# Logs
+**/*.log
+
+# Build output
+frontend/dist/
+frontend/build/
+backend/dist/
+backend/build/
+
+# Environment files
+frontend/.env.local
+backend/.env
+.env
+
+# OS/system files
+.DS_Store
+Thumbs.db
+
+# IDE/editor files
+.vscode/
+.idea/
+*.swp
+
+# Optional: ignore coverage, temp files, etc.
+coverage/
+temp/
+*.tmp

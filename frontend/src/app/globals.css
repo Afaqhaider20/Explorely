@@ -1,0 +1,103 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 240 10% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 3.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 3.9%;
+    
+    /* New primary color: #3A1078 */
+    --primary: 256 75% 27%;
+    --primary-foreground: 0 0% 98%;
+    
+    /* New secondary color: #4E31AA */
+    --secondary: 253 56% 43%;
+    --secondary-foreground: 0 0% 98%;
+    
+    /* New accent color: #3795BD */
+    --accent: 198 55% 48%;
+    --accent-foreground: 0 0% 98%;
+    
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 46.1%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 5.9% 90%;
+    --input: 240 5.9% 90%;
+    --ring: 256 75% 27%;
+    
+    /* Chart colors updated to match new theme */
+    --chart-1: 256 75% 27%;
+    --chart-2: 253 56% 43%;
+    --chart-3: 198 55% 48%;
+    --chart-4: 255 70% 45%;
+    --chart-5: 200 60% 50%;
+    
+    --radius: 0.5rem;
+  }
+  .dark {
+    --background: 256 75% 5%;
+    --foreground: 0 0% 98%;
+    --card: 256 75% 5%;
+    --card-foreground: 0 0% 98%;
+    --popover: 256 75% 5%;
+    --popover-foreground: 0 0% 98%;
+    
+    /* Dark mode variants of the new colors */
+    --primary: 256 75% 65%;
+    --primary-foreground: 256 75% 5%;
+    
+    --secondary: 253 56% 70%;
+    --secondary-foreground: 253 56% 5%;
+    
+    --accent: 198 55% 65%;
+    --accent-foreground: 198 55% 5%;
+    
+    --muted: 256 75% 15%;
+    --muted-foreground: 256 75% 65%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 256 75% 15%;
+    --input: 256 75% 15%;
+    --ring: 256 75% 65%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  
+  /* Add these new styles */
+  :focus {
+    @apply outline-none;
+  }
+  
+  .focus-visible\:ring-1:focus-visible {
+    --tw-ring-offset-width: 0px;
+  }
+  
+  /* Add a subtle grid pattern with CSS */
+  .bg-grid-pattern {
+    background-image: radial-gradient(
+      circle,
+      currentColor 1px,
+      transparent 1px
+    );
+    background-size: 30px 30px;
+  }
+  
+  /* Remove the custom rdp styles that were added before */
+}
