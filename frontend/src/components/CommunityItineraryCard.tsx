@@ -106,7 +106,7 @@ export function CommunityItineraryCard({
     e.preventDefault(); // Prevent navigation
     if (!isOwner || !token) return;
 
-    if (!itinerary?._id || !itinerary?.communityId) {
+    if (!itinerary?._id || !itinerary?.community) {
       toast.error('Invalid itinerary data');
       return;
     }

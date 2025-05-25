@@ -185,7 +185,7 @@ export function CreateCommunityDialog({ onSubmit, trigger }: CreateCommunityDial
       }
 
       // Send request
-      const response = await fetch('http://localhost:5000/api/communities', {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/communities`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
