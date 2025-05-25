@@ -54,7 +54,7 @@ router.get('/', async (req, res) => {
             const posts = await Post.find({ _id: { $in: allPostIds } })
                 .select('_id title content media createdAt updatedAt voteCount')
                 .populate('author', '_id username avatar')
-                .populate('community', '_id name')
+                .populate('community', '_id name creator')
                 .lean();
                 
             // Add comment count to posts

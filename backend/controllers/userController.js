@@ -81,8 +81,15 @@ const loginUser = async (req, res) => {
         const user = await User.findOne({ email });
 
         if (user && (await bcrypt.compare(password, user.password))) {
+            // Check if user is banned
+            if (user.isBanned) {
+                return res.status(403).json({ 
+                    message: 'Your account has been banned. Please contact support for more information.' 
+                });
+            }
+
             const populatedUser = await User.findById(user._id)
-                .select('username email avatar bio joinedCommunities') // Removed bio
+                .select('username email avatar bio joinedCommunities')
                 .populate('joinedCommunities', 'name avatar')
                 .lean();
 
@@ -252,11 +259,128 @@ const updateProfile = async (req, res) => {
     }
 };
 
+// Get user profile by ID
+const getProfileById = async (req, res) => {
+    try {
+        // Check if the ID is a valid MongoDB ObjectId
+        if (!req.params.id.match(/^[0-9a-fA-F]{24}$/)) {
+            return res.status(400).json({ message: 'Invalid user ID format' });
+        }
+
+        const user = await User.findById(req.params.id)
+            .select('-password') 
+            .populate({
+                path: 'joinedCommunities',
+                select: 'name description members avatar',
+                populate: {
+                    path: 'members',
+                    select: 'username avatar'
+                }
+            })
+            .lean();
+
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        // Get user's posts
+        const posts = await Post.find({ author: user._id })
+            .select('title content media voteCount createdAt updatedAt')
+            .populate('community', 'name')
+            .sort({ createdAt: -1 })
+            .lean();
+
+        // Add comment count to each post
+        const postsWithCommentCount = await Promise.all(posts.map(async post => {
+            const commentCount = await Comment.countDocuments({ post: post._id });
+            return {
+                ...post,
+                commentCount
+            };
+        }));
+
+        // Format communities
+        const formattedCommunities = user.joinedCommunities.map(community => ({
+            _id: community._id,
+            name: community.name,
+            description: community.description,
+            avatar: community.avatar,
+            members: community.members,
+            memberCount: community.members.length
+        }));
+
+        // Format user data
+        const { password, ...userWithoutPassword } = user;
+        
+        const userData = {
+            ...userWithoutPassword,
+            joinedCommunities: formattedCommunities,
+            posts: postsWithCommentCount
+        };
+
+        res.json(userData);
+    } catch (error) {
+        console.error('Error getting profile by ID:', error);
+        // Check if it's a MongoDB error
+        if (error.name === 'CastError') {
+            return res.status(400).json({ message: 'Invalid user ID format' });
+        }
+        res.status(500).json({ message: 'Internal server error' });
+    }
+};
+
+// Refresh token
+const refreshToken = async (req, res) => {
+    try {
+        // Get the current token from the cookie
+        const token = req.cookies.token;
+        
+        if (!token) {
+            return res.status(401).json({ message: 'No token provided' });
+        }
+
+        // Verify the current token
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        
+        // Get the user
+        const user = await User.findById(decoded.id).select('-password');
+        
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        // Check if user is banned
+        if (user.isBanned) {
+            return res.status(403).json({ 
+                message: 'Your account has been banned. Please contact support for more information.' 
+            });
+        }
+
+        // Generate new token
+        const newToken = generateToken(user._id);
+
+        // Set the new token in cookie
+        res.cookie('token', newToken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+            maxAge: 24 * 60 * 60 * 1000 // 1 day
+        });
+
+        res.json({ token: newToken });
+    } catch (error) {
+        console.error('Error refreshing token:', error);
+        res.status(401).json({ message: 'Invalid token' });
+    }
+};
+
 module.exports = {
     registerUser,
     loginUser,
     getProfile,
     logoutUser,
     updateProfile,
-    generateToken  // Export the function so it can be imported elsewhere if needed
+    getProfileById,
+    refreshToken,
+    generateToken
 };

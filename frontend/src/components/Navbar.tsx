@@ -1,12 +1,12 @@
 'use client';
 
-import { useEffect, useState, FormEvent } from 'react';
+import { useEffect, useState, FormEvent, useCallback } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { SignInDialog } from "@/components/SignInDialog";
 import { SignUpDialog } from "@/components/SignUpDialog";
-import { Search, MessageCircle, UserCircle, LogOut, Bell } from 'lucide-react';
+import { Search, MessageCircle, UserCircle, LogOut, X } from 'lucide-react';
 import { useAuth } from '@/store/AuthContext';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -17,6 +17,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { NotificationsDropdown } from '@/components/NotificationsDropdown';
 import axios from 'axios';
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -25,14 +26,40 @@ import { useRouter } from 'next/navigation';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
-export default function Navbar() {
+export function Navbar({ className }: { className?: string }) {
   const [scrolled, setScrolled] = useState(false);
-  const { user, logout, token } = useAuth();
+  const [unreadMessageCount, setUnreadMessageCount] = useState(0);
+  const { user, token, logout, isInitialized } = useAuth();
+  const router = useRouter();
   const [signInOpen, setSignInOpen] = useState(false);
   const [signUpOpen, setSignUpOpen] = useState(false);
   const [searchFocused, setSearchFocused] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const router = useRouter();
+
+  const fetchUnreadCounts = useCallback(async () => {
+    if (!token) return;
+
+    try {
+      const response = await axios.get<{
+        totalUnreadCount: number;
+        hasUnread: boolean;
+      }>(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/users/navbar-unread-count`,
+        {
+          headers: { Authorization: `Bearer ${token}` }
+        }
+      );
+      setUnreadMessageCount(response.data.totalUnreadCount);
+    } catch (error) {
+      console.error('Error fetching unread counts:', error);
+      // Don't set count to 0 on error to avoid flickering
+    }
+  }, [token]);
+
+  // Fetch initial unread counts
+  useEffect(() => {
+    fetchUnreadCounts();
+  }, [fetchUnreadCounts]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -44,7 +71,8 @@ export default function Navbar() {
 
   const handleLogout = async () => {
     try {
-      await axios.post(
+      // Try to call logout endpoint, but don't wait for it
+      axios.post(
         `${API_URL}/api/users/logout`,
         {},
         {
@@ -55,18 +83,29 @@ export default function Navbar() {
             'Authorization': `Bearer ${token}`
           }
         }
-      );
+      ).catch(() => {
+        // Ignore any errors from the logout endpoint
+        console.log('Logout endpoint failed, proceeding with local logout');
+      });
       
+      // Always perform local logout regardless of API response
       logout();
       toast.success("Successfully logged out", {
         description: "See you again soon!"
       });
     } catch (error) {
+      // If anything fails, still perform local logout
       console.error('Logout failed:', error);
-      toast.error("Unable to log out", {
-        description: "Please try again"
+      logout();
+      toast.success("Logged out", {
+        description: "See you again soon!"
       });
     }
+  };
+
+  const handleMessagesClick = () => {
+    setUnreadMessageCount(0);
+    router.push('/messages');
   };
 
   const handleSwitchToSignUp = () => {
@@ -107,7 +146,8 @@ export default function Navbar() {
       scrolled 
         ? "bg-background/95 shadow-lg" 
         : "bg-background/80",
-      "backdrop-blur-[12px] border-b"
+      "backdrop-blur-[12px] border-b",
+      className
     )}>
       <nav className="container px-4 h-16 max-w-7xl mx-auto flex items-center justify-between relative">
         {/* Logo */}
@@ -155,6 +195,16 @@ export default function Navbar() {
               onFocus={() => setSearchFocused(true)}
               onBlur={() => setTimeout(() => setSearchFocused(false), 200)}
             />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground hover:text-foreground transition-colors"
+                aria-label="Clear search"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
             <div className={cn(
               "absolute inset-y-0 right-0 flex items-center pr-3",
               "text-xs font-medium text-muted-foreground",
@@ -204,21 +254,16 @@ export default function Navbar() {
 
         {/* Auth Section with Messages and Avatar */}
         <div className="flex items-center gap-3">
-          {user ? (
+          {!isInitialized ? (
+            <div className="h-10 w-10 rounded-full bg-muted animate-pulse" />
+          ) : user ? (
             <>
-              <Button 
-                variant="ghost" 
-                size="icon"
-                className="relative text-muted-foreground hover:text-primary"
-                aria-label="Notifications"
-              >
-                <Bell className="h-5 w-5" />
-                <Badge className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-xs">
-                  3
-                </Badge>
-              </Button>
+              <NotificationsDropdown token={token} />
 
-              <Link href="/messages">
+              <Link 
+                href="/messages"
+                onClick={handleMessagesClick}
+              >
                 <Button 
                   variant="ghost" 
                   size="icon"
@@ -226,12 +271,15 @@ export default function Navbar() {
                   aria-label="Messages"
                 >
                   <MessageCircle className="h-5 w-5" />
-                  <Badge 
-                    variant="default" 
-                    className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-xs"
-                  >
-                    2
-                  </Badge>
+                  {unreadMessageCount > 0 && (
+                    <Badge 
+                      variant="default"
+                      className="absolute -top-1.5 -right-1.5 min-w-[1.25rem] h-5 px-1.5 py-0 rounded-full flex items-center justify-center border border-background animate-pulse"
+                      aria-label={`${unreadMessageCount} unread messages`}
+                    >
+                      {unreadMessageCount > 99 ? '99+' : unreadMessageCount}
+                    </Badge>
+                  )}
                 </Button>
               </Link>
 

@@ -7,10 +7,14 @@ import { formatDistanceToNow, parseISO } from "date-fns";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 // Remove unused Textarea import
-import { Reply, Heart, MessageSquare } from "lucide-react";
+import { Reply, Heart, MessageSquare, Smile } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
+import axios from "axios";
+import Link from "next/link";
+import { SignInDialog } from "@/components/SignInDialog";
+import EmojiPicker, { EmojiClickData, Theme } from 'emoji-picker-react';
 
 interface CommentAuthor {
   _id: string;
@@ -35,93 +39,197 @@ interface CommentData {
 
 interface CommentsProps {
   postId: string;
+  type?: 'post' | 'review';
+  onCommentAdded?: () => void;
 }
 
 // Remove unused CommentReplyState interface
 
-export function Comments({ postId }: CommentsProps) {
+interface CommentTextareaProps {
+  onSubmit: (content: string) => Promise<void>;
+  onCancel: () => void;
+  submitting: boolean;
+  placeholder?: string;
+  defaultValue?: string;
+  className?: string;
+}
+
+const CommentTextarea = ({ 
+  onSubmit, 
+  onCancel, 
+  submitting, 
+  placeholder = "What are your thoughts?",
+  defaultValue = "",
+  className
+}: CommentTextareaProps) => {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+
+  const handleSubmit = async () => {
+    if (!textareaRef.current || !textareaRef.current.value.trim()) {
+      toast.error("Comment cannot be empty");
+      return;
+    }
+    const content = textareaRef.current.value;
+    textareaRef.current.value = ''; // Clear before unmounting
+    await onSubmit(content);
+  };
+
+  const handleCancel = () => {
+    if (textareaRef.current) {
+      textareaRef.current.value = ''; // Clear before unmounting
+    }
+    onCancel();
+  };
+
+  const onEmojiClick = (emojiData: EmojiClickData) => {
+    if (textareaRef.current) {
+      const cursorPosition = textareaRef.current.selectionStart;
+      const textBefore = textareaRef.current.value.substring(0, cursorPosition);
+      const textAfter = textareaRef.current.value.substring(cursorPosition);
+      textareaRef.current.value = textBefore + emojiData.emoji + textAfter;
+      
+      // Set cursor position after the inserted emoji
+      const newCursorPosition = cursorPosition + emojiData.emoji.length;
+      textareaRef.current.setSelectionRange(newCursorPosition, newCursorPosition);
+      textareaRef.current.focus();
+    }
+    setShowEmojiPicker(false);
+  };
+
+  // Close emoji picker when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (showEmojiPicker && !(event.target as Element).closest('.emoji-picker-container')) {
+        setShowEmojiPicker(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showEmojiPicker]);
+
+  return (
+    <div className={cn("border rounded-md p-2 sm:p-3 bg-background", className)}>
+      <div className="relative">
+        <div className="relative">
+          <textarea
+            ref={textareaRef}
+            placeholder={placeholder}
+            className="w-full min-h-[90px] sm:min-h-[120px] resize-y p-3 sm:p-4 border rounded-md text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 bg-background/50"
+            defaultValue={defaultValue}
+          />
+          <div className="absolute bottom-2 right-2 flex items-center gap-1">
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                className="p-1.5 hover:bg-muted rounded-md transition-colors text-muted-foreground hover:text-foreground"
+                title="Add emoji"
+              >
+                <Smile className="h-4 w-4" />
+              </button>
+              {showEmojiPicker && (
+                <div className="absolute bottom-full right-0 z-50 emoji-picker-container mb-2">
+                  <div className="rounded-lg shadow-lg border bg-background">
+                    <EmojiPicker
+                      onEmojiClick={onEmojiClick}
+                      width={250}
+                      height={300}
+                      searchDisabled
+                      skinTonesDisabled
+                      previewConfig={{
+                        showPreview: false
+                      }}
+                      theme={Theme.LIGHT}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+      <div className="flex justify-end gap-2 mt-3">
+        <Button 
+          variant="outline" 
+          size="sm"
+          className="h-7 text-xs px-2 sm:h-8 sm:px-3"
+          onClick={handleCancel}
+        >
+          Cancel
+        </Button>
+        <Button
+          size="sm"
+          className="h-7 text-xs px-2 sm:h-8 sm:px-3"
+          onClick={handleSubmit}
+          disabled={submitting}
+        >
+          {submitting ? "Submitting..." : "Post Comment"}
+        </Button>
+      </div>
+    </div>
+  );
+};
+
+export function Comments({ postId, type = 'post', onCommentAdded }: CommentsProps) {
   const [comments, setComments] = useState<CommentData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [replyToComment, setReplyToComment] = useState<string | null>(null);
+  const [activeTextarea, setActiveTextarea] = useState<{ type: 'new' | 'reply', id?: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [likedComments, setLikedComments] = useState<Set<string>>(new Set());
+  const [signInOpen, setSignInOpen] = useState(false);
   const { token, user } = useAuth();
   
-  // Use refs for direct DOM access
-  const newCommentRef = useRef<HTMLTextAreaElement>(null);
-  const replyRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
-
   const fetchComments = useCallback(async () => {
     setLoading(true);
     setError(null);
     
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
-      const url = `${baseUrl}/api/post/${postId}/comments`;
-      
-      const response = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: "application/json"
-        },
-      });
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Error response:', errorText);
-        throw new Error(`Failed to fetch comments: ${response.status}`);
-      }
-
-      const data = await response.json();
-      
-      if (!data || !data.data || !Array.isArray(data.data.comments)) {
-        console.error('Invalid response format:', data);
-        throw new Error('Invalid response format from server');
-      }
-
-      setComments(data.data.comments);
-    } catch (err) {
-      console.error("Error fetching comments:", err);
-      setError(err instanceof Error ? err.message : "Error loading comments");
+      const response = await axios.get(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/${type}/${postId}/comments`
+      );
+      setComments(response.data.data.comments);
+    } catch (error) {
+      console.error('Error fetching comments:', error);
+      toast.error('Failed to load comments');
     } finally {
       setLoading(false);
     }
-  }, [postId, token]);
+  }, [postId, type]);
 
   useEffect(() => {
-    if (token) {
-      fetchComments();
-    } else {
-      setLoading(false);
-      setError("Authentication required to view comments");
-    }
-  }, [token, fetchComments]);
+    fetchComments();
+  }, [fetchComments]);
 
   const handleLikeComment = async (commentId: string) => {
+    if (!user) {
+      toast.error("Please log in to like comments");
+      setSignInOpen(true);
+      return;
+    }
+
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
-      // Updated URL to match the correct endpoint format
-      const url = `${baseUrl}/api/comments/${commentId}/like`;
-      
-      const response = await fetch(url, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      });
+      const response = await axios.post(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/comments/${commentId}/like`,
+        {},
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
 
-      if (!response.ok) {
-        throw new Error("Failed to toggle like");
-      }
-
-      const data = await response.json();
+      const data = response.data.data;
       
       // Update local state based on the response
       setLikedComments(prev => {
         const newSet = new Set(prev);
-        if (data.data.hasLiked) {
+        if (data.hasLiked) {
           newSet.add(commentId);
         } else {
           newSet.delete(commentId);
@@ -131,11 +239,11 @@ export function Comments({ postId }: CommentsProps) {
       
       // Update comment like count directly instead of refetching all comments
       setComments(prevComments => 
-        updateCommentLikeCount(prevComments, commentId, data.data.likeCount)
+        updateCommentLikeCount(prevComments, commentId, data.likeCount)
       );
       
       // Show appropriate toast message
-      toast.success(data.data.hasLiked ? "Comment liked" : "Comment unliked");
+      toast.success(data.hasLiked ? "Comment liked" : "Comment unliked");
       
     } catch (error) {
       console.error("Error toggling like:", error);
@@ -161,86 +269,24 @@ export function Comments({ postId }: CommentsProps) {
     });
   };
 
-  const handleSubmitReply = async (parentId: string) => {
-    const replyTextarea = replyRefs.current[parentId];
-    if (!replyTextarea || !replyTextarea.value.trim()) {
-      toast.error("Reply cannot be empty");
-      return;
-    }
-
-    const content = replyTextarea.value;
+  const handleSubmitComment = async (content: string, parentCommentId: string | null) => {
     setSubmitting(true);
-    
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
-      const response = await fetch(
-        `${baseUrl}/api/post/${postId}/comments`,
+      await axios.post(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/${type}/${postId}/comments`,
+        { content, parentCommentId },
         {
-          method: "POST",
           headers: {
-            "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
           },
-          body: JSON.stringify({
-            content: content,
-            parentCommentId: parentId
-          }),
         }
       );
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to submit reply");
-      }
-
-      setReplyToComment(null);
-      toast.success("Reply posted successfully");
+      setActiveTextarea(null);
+      toast.success(parentCommentId ? "Reply posted successfully" : "Comment posted successfully");
       fetchComments();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to post reply");
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleSubmitNewComment = async () => {
-    if (!newCommentRef.current || !newCommentRef.current.value.trim()) {
-      toast.error("Comment cannot be empty");
-      return;
-    }
-
-    const content = newCommentRef.current.value;
-    setSubmitting(true);
-    
-    try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
-      const response = await fetch(
-        `${baseUrl}/api/post/${postId}/comments`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            content: content,
-            parentCommentId: null
-          }),
-        }
-      );
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to submit comment");
-      }
-
-      // Clear the textarea
-      if (newCommentRef.current) {
-        newCommentRef.current.value = '';
-      }
-      
-      toast.success("Comment posted successfully");
-      fetchComments();
+      onCommentAdded?.();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to post comment");
     } finally {
@@ -248,66 +294,79 @@ export function Comments({ postId }: CommentsProps) {
     }
   };
 
-  // Close any open reply when component unmounts
+  // Close any open textarea when component unmounts
   useEffect(() => {
     return () => {
-      setReplyToComment(null);
+      setActiveTextarea(null);
     };
   }, []);
 
   const CommentItem = ({ comment, depth = 0 }: { comment: CommentData; depth?: number }) => {
-    const canReply = comment.level < 3;
-    const isReplyOpen = replyToComment === comment._id;
+    const { user } = useAuth();
+    const canReply = comment.level < 6;
+    const isReplyOpen = activeTextarea?.type === 'reply' && activeTextarea?.id === comment._id;
     const hasLiked = likedComments.has(comment._id);
-    const borderColors = ["border-primary/30", "border-blue-400/30", "border-purple-400/30"];
-    const bgColors = ["bg-primary/5", "bg-blue-400/5", "bg-purple-400/5"];
+    const borderColors = [
+      "border-primary/30", 
+      "border-blue-400/30", 
+      "border-purple-400/30",
+      "border-green-400/30",
+      "border-orange-400/30",
+      "border-pink-400/30"
+    ];
+    const bgColors = [
+      "bg-primary/5", 
+      "bg-blue-400/5", 
+      "bg-purple-400/5",
+      "bg-green-400/5",
+      "bg-orange-400/5",
+      "bg-pink-400/5"
+    ];
     
-    // Fix ref assignment for the textarea
-    const setTextAreaRef = useCallback((el: HTMLTextAreaElement | null) => {
-      if (comment._id) {
-        replyRefs.current[comment._id] = el;
+    const handleReplyClick = () => {
+      if (!user) {
+        toast.error("Please log in to reply to comments");
+        setSignInOpen(true);
+        return;
       }
-    }, [comment._id]);
-    
-    // Focus the textarea when reply opens
-    useEffect(() => {
-      if (isReplyOpen && replyRefs.current[comment._id]) {
-        setTimeout(() => {
-          replyRefs.current[comment._id]?.focus();
-        }, 50);
-      }
-    }, [isReplyOpen, comment._id]);
+      setActiveTextarea(isReplyOpen ? null : { type: 'reply', id: comment._id });
+    };
     
     return (
       <div 
         className={cn(
-          "border-l-2 pl-4 rounded-l",
+          "border-l-2 pl-2 sm:pl-4 rounded-l",
           borderColors[depth % borderColors.length],
-          depth > 0 ? "mt-4" : "mt-6"
+          depth > 0 ? "mt-3 sm:mt-4" : "mt-4 sm:mt-6"
         )}
       >
         <div className={cn(
-          "p-4 rounded", 
+          "p-2 sm:p-4 rounded", 
           bgColors[depth % bgColors.length]
         )}>
-          <div className="flex items-center gap-2 mb-3">
-            <Avatar className="h-7 w-7 ring-1 ring-primary/20">
+          <div className="flex items-center gap-2 mb-2 sm:mb-3">
+            <Avatar className="h-6 w-6 sm:h-7 sm:w-7 ring-1 ring-primary/20">
               <AvatarImage src={comment.author.avatar} alt={comment.author.username} />
               <AvatarFallback className="text-xs">{comment.author.username[0].toUpperCase()}</AvatarFallback>
             </Avatar>
-            <div className="flex flex-col xs:flex-row xs:items-center gap-1 xs:gap-2">
-              <span className="text-sm font-medium">{comment.author.username}</span>
+            <div className="flex flex-col xs:flex-row xs:items-center gap-0.5 xs:gap-2">
+              <Link 
+                href={comment.author._id === user?._id ? '/profile' : `/profile/${comment.author._id}`} 
+                className="text-xs sm:text-sm font-medium hover:text-primary transition-colors"
+              >
+                {comment.author.username}
+              </Link>
               <span className="text-xs text-muted-foreground hidden xs:inline">•</span>
-              <span className="text-xs text-muted-foreground">
+              <span className="text-[10px] xs:text-xs text-muted-foreground">
                 {formatDistanceToNow(parseISO(comment.createdAt), { addSuffix: true })}
                 {comment.isEdited && <span className="ml-1 italic">(edited)</span>}
               </span>
             </div>
           </div>
           
-          <p className="text-sm mb-3 whitespace-pre-wrap">{comment.content}</p>
+          <p className="text-xs sm:text-sm mb-2 sm:mb-3 whitespace-pre-wrap">{comment.content}</p>
           
-          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+          <div className="flex items-center gap-2 sm:gap-3 text-[10px] sm:text-xs text-muted-foreground">
             <button 
               onClick={() => handleLikeComment(comment._id)}
               className={cn(
@@ -317,7 +376,7 @@ export function Comments({ postId }: CommentsProps) {
               disabled={hasLiked}
             >
               <Heart className={cn(
-                "h-3.5 w-3.5",
+                "h-3 w-3 sm:h-3.5 sm:w-3.5",
                 hasLiked && "fill-current"
               )} />
               <span>{comment.likeCount || 0}</span>
@@ -325,45 +384,23 @@ export function Comments({ postId }: CommentsProps) {
             
             {canReply && (
               <button 
-                onClick={() => setReplyToComment(isReplyOpen ? null : comment._id)}
+                onClick={handleReplyClick}
                 className="flex items-center gap-1 hover:text-primary transition-colors"
               >
-                <Reply className="h-3.5 w-3.5" />
+                <Reply className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                 <span>Reply</span>
               </button>
             )}
           </div>
           
           {isReplyOpen && (
-            <div className="mt-4 border rounded-md p-3 bg-background">
-              <textarea
-                ref={setTextAreaRef}
+            <div className="mt-3 sm:mt-4">
+              <CommentTextarea
+                onSubmit={(content) => handleSubmitComment(content, comment._id)}
+                onCancel={() => setActiveTextarea(null)}
+                submitting={submitting}
                 placeholder="Write a thoughtful reply..."
-                className="w-full min-h-[100px] mb-2 bg-transparent p-2 border rounded-md text-sm resize-y focus:outline-none focus:ring-2 focus:ring-primary/50"
-                defaultValue=""
               />
-              <div className="flex justify-end gap-2">
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={() => {
-                    setReplyToComment(null);
-                    // Clear the ref when canceling
-                    if (replyRefs.current[comment._id]) {
-                      replyRefs.current[comment._id]!.value = '';
-                    }
-                  }}
-                >
-                  Cancel
-                </Button>
-                <Button 
-                  size="sm"
-                  onClick={() => handleSubmitReply(comment._id)}
-                  disabled={submitting}
-                >
-                  {submitting ? "Submitting..." : "Reply"}
-                </Button>
-              </div>
             </div>
           )}
         </div>
@@ -416,55 +453,68 @@ export function Comments({ postId }: CommentsProps) {
   }
 
   return (
-    <Card className="p-6 shadow-md">
-      <div className="flex items-center gap-2 mb-8">
-        <MessageSquare className="h-5 w-5 text-primary" />
-        <h2 className="text-xl font-semibold">Comments</h2>
+    <Card className="p-3 sm:p-6 shadow-md">
+      <div className="flex items-center gap-2 mb-4 sm:mb-8">
+        <MessageSquare className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
+        <h2 className="text-lg sm:text-xl font-semibold">Comments</h2>
         {comments.length > 0 && (
-          <span className="text-sm text-muted-foreground">({comments.length})</span>
+          <span className="text-xs sm:text-sm text-muted-foreground">({comments.length})</span>
         )}
       </div>
       
-      <div className="mb-8">
-        <div className="flex items-center gap-3 mb-4">
-          {user && (
-            <Avatar className="h-8 w-8">
-              <AvatarImage src={user.avatar || undefined} />
-              <AvatarFallback>{user.username?.[0]?.toUpperCase() || '?'}</AvatarFallback>
-            </Avatar>
+      {user ? (
+        <div className="mb-4 sm:mb-8">
+          {activeTextarea?.type !== 'new' ? (
+            <Button
+              onClick={() => setActiveTextarea({ type: 'new' })}
+              className="w-full sm:w-auto"
+            >
+              <MessageSquare className="h-4 w-4 mr-2" />
+              Add a comment
+            </Button>
+          ) : (
+            <div>
+              <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
+                <Avatar className="h-7 w-7 sm:h-8 sm:w-8">
+                  <AvatarImage src={user.avatar || undefined} />
+                  <AvatarFallback>{user.username?.[0]?.toUpperCase() || '?'}</AvatarFallback>
+                </Avatar>
+                <span className="text-xs sm:text-sm font-medium">Add a comment</span>
+              </div>
+              <CommentTextarea
+                onSubmit={(content) => handleSubmitComment(content, null)}
+                onCancel={() => setActiveTextarea(null)}
+                submitting={submitting}
+              />
+            </div>
           )}
-          <span className="text-sm font-medium">Add a comment</span>
         </div>
-        
-        <textarea
-          ref={newCommentRef}
-          placeholder="What are your thoughts?"
-          className="w-full min-h-[120px] mb-3 resize-y p-3 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-          defaultValue=""
-        />
-        <div className="flex justify-end">
-          <Button
-            onClick={handleSubmitNewComment}
-            disabled={submitting}
-          >
-            {submitting ? "Submitting..." : "Post Comment"}
-          </Button>
+      ) : (
+        <div className="mb-4 sm:mb-8 text-center p-4 border rounded-md bg-muted/50">
+          <p className="text-sm mb-3">Please login to view and add comments</p>
+          <SignInDialog
+            trigger={
+              <Button>Login to Comment</Button>
+            }
+            open={signInOpen}
+            onOpenChange={setSignInOpen}
+          />
         </div>
-      </div>
+      )}
 
       {comments.length > 0 ? (
         <>
-          <Separator className="mb-6" />
-          <div className="space-y-6">
+          <Separator className="mb-4 sm:mb-6" />
+          <div className="space-y-3 sm:space-y-6">
             {comments.map((comment) => (
               <CommentItem key={comment._id} comment={comment} />
             ))}
           </div>
         </>
       ) : (
-        <div className="text-center py-12 text-muted-foreground">
-          <MessageSquare className="h-10 w-10 mx-auto mb-4 opacity-20" />
-          <p>No comments yet. Be the first to join the conversation!</p>
+        <div className="text-center py-8 sm:py-12 text-muted-foreground">
+          <MessageSquare className="h-8 w-8 sm:h-10 sm:w-10 mx-auto mb-3 sm:mb-4 opacity-20" />
+          <p className="text-xs sm:text-sm">No comments yet. Be the first to join the conversation!</p>
         </div>
       )}
     </Card>

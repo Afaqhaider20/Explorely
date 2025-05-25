@@ -8,7 +8,7 @@ const createComment = async (req, res) => {
         const postId = req.params.postId;
 
         // Validate the post exists
-        const post = await Post.findById(postId);
+        const post = await Post.findById(postId).populate('author', '_id');
         if (!post) {
             return res.status(404).json({ message: 'Post not found' });
         }
@@ -18,7 +18,7 @@ const createComment = async (req, res) => {
             const canNest = await Comment.canNestUnder(parentCommentId);
             if (!canNest) {
                 return res.status(400).json({
-                    message: 'Comments cannot be nested beyond 3 levels'
+                    message: 'Comments cannot be nested beyond 6 levels'
                 });
             }
         }
@@ -34,6 +34,67 @@ const createComment = async (req, res) => {
         await Post.findByIdAndUpdate(postId, {
             $push: { comments: comment._id }
         });
+
+        // Only create a POST_COMMENT notification for the post author when it's a top-level comment
+        // and when the commenter is not the post author (to prevent self-notifications)
+        if (!parentCommentId) {
+            const postAuthorId = post.author._id.toString();
+            const commenterId = req.user._id.toString();
+            
+            if (postAuthorId !== commenterId) {
+                try {
+                    const Notification = require('../models/notificationModel');
+                    await Notification.createNotification({
+                        recipient: post.author._id,
+                        sender: req.user._id,
+                        type: 'POST_COMMENT',
+                        comment: comment._id,
+                        post: postId,
+                        isRead: false,
+                        isSeen: false
+                    });
+                } catch (error) {
+                    console.error('Error creating post comment notification:', error);
+                    // Don't throw the error, just log it
+                }
+            }
+        }
+
+        // Create notification if it's a reply to someone else's comment
+        if (parentCommentId) {
+            try {
+                const parentComment = await Comment.findById(parentCommentId)
+                    .populate('author', '_id');
+                
+                if (parentComment) {
+                    const postAuthorId = post.author._id.toString();
+                    const parentCommentAuthorId = parentComment.author._id.toString();
+                    const commenterId = req.user._id.toString();
+                    
+                    // Only create notification if:
+                    // 1. Parent comment author is not the current user
+                    // 2. Parent comment author is not the post author (to avoid duplicate notifications)
+                    // 3. Current user is not the post author (to prevent self-notifications at any level)
+                    if (parentCommentAuthorId !== commenterId &&
+                        parentCommentAuthorId !== postAuthorId &&
+                        commenterId !== postAuthorId) {
+                        const Notification = require('../models/notificationModel');
+                        await Notification.createNotification({
+                            recipient: parentComment.author._id,
+                            sender: req.user._id,
+                            type: 'COMMENT_REPLY',
+                            comment: comment._id,
+                            post: postId,
+                            isRead: false,
+                            isSeen: false
+                        });
+                    }
+                }
+            } catch (error) {
+                console.error('Error creating comment reply notification:', error);
+                // Don't throw the error, just log it
+            }
+        }
 
         const populatedComment = await Comment.findById(comment._id)
             .populate('author', 'username avatar')
@@ -72,7 +133,7 @@ const getPostComments = async (req, res) => {
                 )
                 .map(reply => ({
                     ...reply,
-                    replies: reply.level < 3 ? getReplies(reply._id) : [] // Only get replies if level < 3
+                    replies: reply.level < 6 ? getReplies(reply._id) : [] // Only get replies if level < 6
                 }))
                 .sort((a, b) => a.createdAt - b.createdAt); // Sort replies by oldest first
         };
@@ -125,7 +186,8 @@ const deleteComment = async (req, res) => {
 // Toggle like on comment
 const toggleLike = async (req, res) => {
     try {
-        const comment = await Comment.findById(req.params.commentId);
+        const comment = await Comment.findById(req.params.commentId)
+            .populate('author', '_id');
         
         if (!comment) {
             return res.status(404).json({ message: 'Comment not found' });
@@ -140,6 +202,20 @@ const toggleLike = async (req, res) => {
         } else {
             // Like
             comment.likes.push(userId);
+
+            // Create notification if it's not a self-like
+            if (comment.author._id.toString() !== userId.toString()) {
+                const Notification = require('../models/notificationModel');
+                await Notification.createNotification({
+                    recipient: comment.author._id,
+                    sender: userId,
+                    type: 'COMMENT_LIKE',
+                    comment: comment._id,
+                    post: comment.post,
+                    isRead: false,
+                    isSeen: false
+                });
+            }
         }
 
         await comment.save();

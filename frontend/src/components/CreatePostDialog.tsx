@@ -23,6 +23,9 @@ const MAX_CONTENT_LENGTH = 2000;
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png']; // Remove webp
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
 
+// Add orientation type
+type ImageOrientation = 'portrait' | 'landscape' | 'square' | null;
+
 export function CreatePostDialog({ communityId, communityName, trigger, onPostCreated }: CreatePostDialogProps) {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
@@ -31,6 +34,7 @@ export function CreatePostDialog({ communityId, communityName, trigger, onPostCr
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const { token } = useAuth();
+  const [orientation, setOrientation] = useState<ImageOrientation>(null);
 
   const handleMediaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -48,8 +52,25 @@ export function CreatePostDialog({ communityId, communityName, trigger, onPostCr
       return;
     }
 
+    // Read image dimensions to determine orientation
+    const url = URL.createObjectURL(file);
+    const img = new window.Image();
+    img.onload = () => {
+      if (img.width > img.height) {
+        setOrientation('landscape');
+      } else if (img.width < img.height) {
+        setOrientation('portrait');
+      } else {
+        setOrientation('square');
+      }
+      setPreviewUrl(url);
+    };
+    img.onerror = () => {
+      setOrientation(null);
+      setPreviewUrl(url);
+    };
+    img.src = url;
     setMedia(file);
-    setPreviewUrl(URL.createObjectURL(file));
   };
 
   const removeMedia = () => {
@@ -58,6 +79,7 @@ export function CreatePostDialog({ communityId, communityName, trigger, onPostCr
     }
     setMedia(null);
     setPreviewUrl(null);
+    setOrientation(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -117,14 +139,14 @@ export function CreatePostDialog({ communityId, communityName, trigger, onPostCr
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="sm:max-w-[600px]">
-        <DialogHeader>
-          <DialogTitle>Create Post in {communityName}</DialogTitle>
+      <DialogContent className="max-w-[95vw] w-full min-w-[320px] sm:max-w-md px-4 py-6 sm:px-8 sm:py-8 max-h-[90vh] overflow-y-auto">
+        <DialogHeader className="space-y-3">
+          <DialogTitle className="text-xl font-semibold">Create Post in {communityName}</DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="title">Title</Label>
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="space-y-3">
+            <Label htmlFor="title" className="text-sm font-medium">Title</Label>
             <div className="relative">
               <Input
                 id="title"
@@ -133,46 +155,55 @@ export function CreatePostDialog({ communityId, communityName, trigger, onPostCr
                 placeholder="Give your post a title"
                 maxLength={MAX_TITLE_LENGTH}
                 required
+                className="pr-12 text-base w-full"
               />
-              <span className="absolute right-2 top-2 text-xs text-muted-foreground">
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
                 {title.length}/{MAX_TITLE_LENGTH}
               </span>
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="content">Content</Label>
+          <div className="space-y-3">
+            <Label htmlFor="content" className="text-sm font-medium">Content</Label>
             <div className="relative">
               <Textarea
                 id="content"
                 value={content}
                 onChange={(e) => setContent(e.target.value.slice(0, MAX_CONTENT_LENGTH))}
                 placeholder="What's on your mind?"
-                className="min-h-[150px] resize-none"
+                className="min-h-[150px] resize-none pr-12 text-base w-full"
                 maxLength={MAX_CONTENT_LENGTH}
                 required
               />
-              <span className="absolute right-2 bottom-2 text-xs text-muted-foreground">
+              <span className="absolute right-3 bottom-3 text-xs text-muted-foreground">
                 {content.length}/{MAX_CONTENT_LENGTH}
               </span>
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="media" className="block">Media (optional)</Label>
+          <div className="space-y-3">
+            <Label htmlFor="media" className="text-sm font-medium">Media (optional)</Label>
             {previewUrl ? (
-              <div className="relative w-full aspect-video rounded-lg overflow-hidden border">
+              <div
+                className={`relative w-full rounded-lg overflow-hidden border bg-muted/50
+                  ${orientation === 'portrait' ? 'aspect-[3/4] max-h-[400px]' : ''}
+                  ${orientation === 'landscape' ? 'aspect-video' : ''}
+                  ${orientation === 'square' ? 'aspect-square' : ''}
+                  ${!orientation ? 'aspect-video' : ''}
+                `}
+              >
                 <Image
                   src={previewUrl}
                   alt="Preview"
                   fill
-                  className="object-cover"
+                  className="object-contain"
+                  sizes="(max-width: 768px) 100vw, 600px"
                 />
                 <Button
                   type="button"
                   variant="destructive"
                   size="icon"
-                  className="absolute top-2 right-2"
+                  className="absolute top-2 right-2 h-8 w-8 bg-background/80 backdrop-blur-sm hover:bg-background/90"
                   onClick={removeMedia}
                 >
                   <X className="h-4 w-4" />
@@ -181,10 +212,10 @@ export function CreatePostDialog({ communityId, communityName, trigger, onPostCr
             ) : (
               <Label
                 htmlFor="media"
-                className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer hover:bg-muted/50"
+                className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer hover:bg-muted/50 transition-colors duration-200"
               >
                 <ImagePlus className="h-8 w-8 text-muted-foreground mb-2" />
-                <span className="text-sm text-muted-foreground">
+                <span className="text-sm text-muted-foreground text-center px-4">
                   Click to upload image (JPG or PNG only)
                 </span>
                 <Input
@@ -198,11 +229,20 @@ export function CreatePostDialog({ communityId, communityName, trigger, onPostCr
             )}
           </div>
 
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+          <div className="flex flex-col sm:flex-row justify-end gap-3 pt-2 w-full">
+            <Button 
+              type="button" 
+              variant="outline" 
+              onClick={() => setOpen(false)}
+              className="w-full sm:w-auto"
+            >
               Cancel
             </Button>
-            <Button type="submit" disabled={loading}>
+            <Button 
+              type="submit" 
+              disabled={loading}
+              className="w-full sm:w-auto"
+            >
               {loading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />

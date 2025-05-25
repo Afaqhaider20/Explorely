@@ -50,7 +50,7 @@ const privateNavItems: NavItem[] = [
   },
 ];
 
-export default function Sidebar() {
+export function Sidebar() {
   const pathname = usePathname();
   const { user } = useAuth();
   

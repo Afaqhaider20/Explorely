@@ -1,25 +1,30 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import Navbar from "@/components/Navbar";
-import Sidebar from "@/components/Sidebar";
-import RightSidebar from "@/components/RightSidebar";
 import { AuthProvider } from '@/store/AuthContext';
 import { Toaster } from "@/components/ui/sonner"
+import React from 'react';
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
+  display: "swap",
 });
 
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
   title: "Explorely",
   description: "Explorely is a platform to share and discover new places around the world.",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default function RootLayout({
@@ -28,15 +33,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+    <html lang="en">
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-screen`}>
         <AuthProvider>
-          <Navbar />
-          <Sidebar />
-          <RightSidebar />
-          <main className="pt-[4.5rem] pl-72 pr-96">
-            {children}
-          </main>
+          {children}
         </AuthProvider>
         <Toaster />
       </body>

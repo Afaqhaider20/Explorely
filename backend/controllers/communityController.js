@@ -87,6 +87,7 @@ const getCommunity = async (req, res) => {
             .populate('creator', 'username avatar')
             .populate('moderators', 'username avatar')
             .populate('members', 'username avatar')
+            .populate('blockedMembers', 'username avatar')
             .populate({
                 path: 'posts',
                 select: 'title content media voteCount createdAt updatedAt',
@@ -102,8 +103,19 @@ const getCommunity = async (req, res) => {
             return res.status(404).json({ message: 'Community not found' });
         }
 
+        // Check if user is blocked
+        if (community.blockedMembers && 
+            community.blockedMembers.some(member => 
+                member && member._id && member._id.toString() === req.user._id.toString()
+            )) {
+            return res.status(403).json({ 
+                message: 'You have been blocked from accessing this community' 
+            });
+        }
+
         // Format posts with comment counts
-        const postsWithCommentCounts = await Promise.all(community.posts.map(async post => {
+        const postsWithCommentCounts = await Promise.all((community.posts || []).map(async post => {
+            if (!post) return null;
             const commentCount = await Comment.countDocuments({ post: post._id });
             return {
                 ...post,
@@ -114,11 +126,15 @@ const getCommunity = async (req, res) => {
             };
         }));
 
+        // Filter out any null posts
+        const validPosts = postsWithCommentCounts.filter(post => post !== null);
+
         // Format the response
         const formattedCommunity = {
             ...community,
-            posts: postsWithCommentCounts,
-            memberCount: community.members.length
+            posts: validPosts,
+            memberCount: (community.members || []).length,
+            blockedMembers: community.blockedMembers || []
         };
 
         res.status(200).json({
@@ -126,10 +142,14 @@ const getCommunity = async (req, res) => {
             data: { community: formattedCommunity }
         });
     } catch (error) {
+        console.error('Error in getCommunity:', error);
         if (error.kind === 'ObjectId') {
             return res.status(404).json({ message: 'Community not found' });
         }
-        res.status(500).json({ message: error.message });
+        res.status(500).json({ 
+            message: 'Failed to load community',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 };
 
@@ -312,11 +332,232 @@ const toggleMembership = async (req, res) => {
     }
 };
 
+// Block a member from the community
+const blockMember = async (req, res) => {
+    try {
+        const { memberId } = req.body;
+        const community = await Community.findById(req.params.id);
+
+        if (!community) {
+            return res.status(404).json({ message: 'Community not found' });
+        }
+
+        // Check if user is owner or moderator
+        if (community.creator.toString() !== req.user._id.toString() && 
+            !community.moderators.includes(req.user._id)) {
+            return res.status(403).json({ message: 'Only owner or moderators can block members' });
+        }
+
+        // Check if member exists
+        const member = await User.findById(memberId);
+        if (!member) {
+            return res.status(404).json({ message: 'Member not found' });
+        }
+
+        // Check if member is already blocked
+        if (community.blockedMembers.includes(memberId)) {
+            return res.status(400).json({ message: 'Member is already blocked' });
+        }
+
+        // Remove member from members array and add to blockedMembers
+        community.members = community.members.filter(id => id.toString() !== memberId);
+        community.blockedMembers.push(memberId);
+
+        // Remove community from user's joined communities
+        await User.findByIdAndUpdate(memberId, {
+            $pull: { joinedCommunities: community._id }
+        });
+
+        await community.save();
+
+        res.status(200).json({
+            status: 'success',
+            message: 'Member blocked successfully'
+        });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// Unblock a member from the community
+const unblockMember = async (req, res) => {
+    try {
+        const { memberId } = req.body;
+        const community = await Community.findById(req.params.id);
+
+        if (!community) {
+            return res.status(404).json({ message: 'Community not found' });
+        }
+
+        // Check if user is owner or moderator
+        if (community.creator.toString() !== req.user._id.toString() && 
+            !community.moderators.includes(req.user._id)) {
+            return res.status(403).json({ message: 'Only owner or moderators can unblock members' });
+        }
+
+        // Check if member is blocked
+        if (!community.blockedMembers.includes(memberId)) {
+            return res.status(400).json({ message: 'Member is not blocked' });
+        }
+
+        // Remove member from blockedMembers array
+        community.blockedMembers = community.blockedMembers.filter(id => id.toString() !== memberId);
+        await community.save();
+
+        res.status(200).json({
+            status: 'success',
+            message: 'Member unblocked successfully'
+        });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// Update a community
+const updateCommunity = async (req, res) => {
+    try {
+        const community = await Community.findById(req.params.id);
+        
+        if (!community) {
+            return res.status(404).json({ message: 'Community not found' });
+        }
+
+        // Check if user is the owner
+        if (community.creator.toString() !== req.user._id.toString()) {
+            return res.status(403).json({ message: 'Only the community owner can update the community' });
+        }
+
+        const { name, description } = req.body;
+        let rules = [];
+
+        // Parse rules from string to array
+        try {
+            rules = JSON.parse(req.body.rules);
+        } catch (error) {
+            return res.status(400).json({ 
+                message: 'Rules must be a valid JSON array' 
+            });
+        }
+
+        // Validate required fields
+        if (!name || !description || !Array.isArray(rules)) {
+            return res.status(400).json({ 
+                message: 'Name, description, and rules are required. Rules must be an array.' 
+            });
+        }
+
+        // Validate rules format
+        if (rules.length === 0) {
+            return res.status(400).json({
+                message: 'At least one community rule is required'
+            });
+        }
+
+        // Check if name is taken by another community
+        const communityExists = await Community.findOne({ 
+            name, 
+            _id: { $ne: community._id } 
+        });
+        if (communityExists) {
+            return res.status(400).json({ message: 'Community name already taken' });
+        }
+
+        // Upload new avatar if provided
+        let avatarUrl = community.avatar;
+        if (req.file) {
+            avatarUrl = await uploadToCloudinary(req.file, 'explorely/communities');
+        }
+
+        // Update community
+        community.name = name;
+        community.description = description;
+        community.avatar = avatarUrl;
+        community.rules = rules.map((rule, index) => ({
+            order: index + 1,
+            content: rule
+        }));
+
+        await community.save();
+
+        // Fetch the updated community with populated fields
+        const updatedCommunity = await Community.findById(community._id)
+            .populate('creator', 'username avatar')
+            .populate('moderators', 'username avatar')
+            .populate('members', 'username avatar')
+            .populate('blockedMembers', 'username avatar')
+            .lean();
+
+        res.status(200).json({
+            status: 'success',
+            data: { community: updatedCommunity }
+        });
+    } catch (error) {
+        console.error('Error in updateCommunity:', error);
+        res.status(500).json({ 
+            message: 'Failed to update community',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+};
+
+// Get top communities
+const getTopCommunities = async (req, res) => {
+    try {
+        const communities = await Community.aggregate([
+            {
+                $lookup: {
+                    from: 'posts',
+                    localField: '_id',
+                    foreignField: 'community',
+                    as: 'posts'
+                }
+            },
+            {
+                $project: {
+                    _id: 1,
+                    name: 1,
+                    description: 1,
+                    avatar: 1,
+                    memberCount: { $size: '$members' },
+                    postCount: { $size: '$posts' },
+                    score: {
+                        $add: [
+                            { $size: '$members' },
+                            { $multiply: [{ $size: '$posts' }, 2] } // Posts count double
+                        ]
+                    }
+                }
+            },
+            {
+                $sort: { score: -1 }
+            },
+            {
+                $limit: 3
+            }
+        ]);
+
+        res.status(200).json({
+            status: 'success',
+            data: { communities }
+        });
+    } catch (error) {
+        console.error('Error in getTopCommunities:', error);
+        res.status(500).json({ 
+            message: 'Failed to load top communities',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+};
+
 module.exports = {
     createCommunity,
     getCommunity,
     getCommunityPosts,
     joinCommunity,
     leaveCommunity,
-    toggleMembership // Add the new function to exports
+    toggleMembership,
+    blockMember,
+    unblockMember,
+    updateCommunity,
+    getTopCommunities
 };

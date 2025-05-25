@@ -5,6 +5,7 @@ import { MapPin, Calendar, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EditProfileDialog } from "@/components/EditProfileDialog";
 import { Badge } from "@/components/ui/badge";
+import { UpdateProfileData } from "@/lib/services/userService";
 
 interface ProfileStats {
   posts: number;
@@ -25,14 +26,11 @@ interface ProfileHeaderProps {
   avatar?: string;
   userTrustedScore: number;
   stats: ProfileStats;
+  onSave?: (data: UpdateProfileData) => Promise<void>;
+  readOnly?: boolean;
 }
 
-export function ProfileHeader({ username, bio, avatar, userTrustedScore, stats }: ProfileHeaderProps) {
-  const handleSaveProfile = (data: { username: string; bio: string; avatar?: File }) => {
-    // Implement save logic here
-    console.log('Saving profile:', data);
-  };
-
+export function ProfileHeader({ username, bio, avatar, userTrustedScore, stats, onSave, readOnly }: ProfileHeaderProps) {
   // Function to determine the trust level color and label
   const getTrustLevel = (score: number) => {
     if (score >= 100) return { color: "bg-green-100 text-green-800", label: "Trusted Expert" };
@@ -57,13 +55,15 @@ export function ProfileHeader({ username, bio, avatar, userTrustedScore, stats }
               {username[0].toUpperCase()}
             </AvatarFallback>
           </Avatar>
-          <EditProfileDialog
-            username={username}
-            bio={bio}
-            avatar={avatar}
-            onSave={handleSaveProfile}
-            trigger={<Button variant="outline" className="mt-16">Edit Profile</Button>}
-          />
+          {!readOnly && onSave && (
+            <EditProfileDialog
+              username={username}
+              bio={bio}
+              avatar={avatar}
+              onSave={onSave}
+              trigger={<Button variant="outline" className="mt-16">Edit Profile</Button>}
+            />
+          )}
         </div>
 
         {/* Profile Info */}

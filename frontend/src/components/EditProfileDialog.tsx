@@ -15,20 +15,23 @@ import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { ImagePlus } from "lucide-react"
+import { UpdateProfileData } from "@/lib/services/userService"
 
 interface EditProfileProps {
   username: string
   bio: string
   avatar?: string
-  onSave: (data: { username: string; bio: string; avatar?: File }) => void
+  onSave: (data: UpdateProfileData) => Promise<void>
   trigger?: React.ReactNode
 }
 
 export function EditProfileDialog({ username, bio, avatar, onSave, trigger }: EditProfileProps) {
+  const [open, setOpen] = useState(false)
   const [newUsername, setNewUsername] = useState(username)
   const [newBio, setNewBio] = useState(bio)
   const [newAvatar, setNewAvatar] = useState<File>()
   const [previewUrl, setPreviewUrl] = useState(avatar)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -38,17 +41,31 @@ export function EditProfileDialog({ username, bio, avatar, onSave, trigger }: Ed
     }
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    onSave({
-      username: newUsername,
-      bio: newBio,
-      avatar: newAvatar,
-    })
+    setIsSubmitting(true)
+    
+    try {
+      const updateData: UpdateProfileData = {
+        username: newUsername,
+        bio: newBio,
+      }
+      
+      if (newAvatar) {
+        updateData.avatar = newAvatar
+      }
+
+      await onSave(updateData)
+      setOpen(false)
+    } catch (error) {
+      console.error('Error saving profile:', error)
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
-    <Dialog>
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         {trigger || <Button variant="outline">Edit Profile</Button>}
       </DialogTrigger>
@@ -108,7 +125,9 @@ export function EditProfileDialog({ username, bio, avatar, onSave, trigger }: Ed
           </div>
 
           <DialogFooter>
-            <Button type="submit">Save Changes</Button>
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? 'Saving...' : 'Save Changes'}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>

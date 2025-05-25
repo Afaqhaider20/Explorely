@@ -25,7 +25,7 @@ const commentSchema = new mongoose.Schema({
     level: {
         type: Number,
         default: 1,
-        max: [3, 'Comments cannot be nested beyond 3 levels']
+        max: [6, 'Comments cannot be nested beyond 6 levels']
     },
     likes: [{
         type: mongoose.Schema.Types.ObjectId,
@@ -60,8 +60,8 @@ commentSchema.pre('save', async function(next) {
             this.level = parentComment.level + 1;
             
             // Check if exceeding max depth
-            if (this.level > 3) {
-                throw new Error('Comments cannot be nested beyond 3 levels');
+            if (this.level > 6) {
+                throw new Error('Comments cannot be nested beyond 6 levels');
             }
         }
     }
@@ -85,7 +85,7 @@ commentSchema.statics.canNestUnder = async function(parentCommentId) {
         throw new Error('Parent comment not found');
     }
     
-    return parentComment.level < 3;
+    return parentComment.level < 6;
 };
 
 // Update indexes - remove all unique constraints

@@ -1,28 +1,76 @@
 import { type FC } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { User, Message as MessageType } from "@/data/demo-messages";
+import { useAuth } from "@/store/AuthContext";
+import { cn } from "@/lib/utils";
 
 interface MessageProps {
-  message: MessageType;
-  user: User;
+  message: {
+    id: string;
+    content: string;
+    timestamp: string;
+    userId: string;
+  };
+  user: {
+    id: string;
+    name: string;
+    avatar: string;
+  };
 }
 
 export const Message: FC<MessageProps> = ({ message, user }) => {
+  const { user: currentUser } = useAuth();
+  const isCurrentUser = currentUser?._id === message.userId;
+
   return (
-    <div className="flex items-start gap-3 py-2 hover:bg-muted/50 rounded-lg px-2 -mx-2">
-      <Avatar className="h-8 w-8">
-        <AvatarImage src={user.avatar} alt={user.name} />
-        <AvatarFallback>{user.name.slice(0, 2).toUpperCase()}</AvatarFallback>
-      </Avatar>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <span className="font-medium">{user.name}</span>
-          <span className="text-xs text-muted-foreground">
-            {new Date(message.timestamp).toLocaleTimeString()}
-          </span>
+    <div
+      className={cn(
+        "flex w-full items-end mb-2",
+        isCurrentUser ? "justify-end" : "justify-start"
+      )}
+    >
+      {/* Avatar */}
+      {!isCurrentUser && (
+        <Avatar className="h-8 w-8 mr-2">
+          <AvatarImage src={user.avatar} alt={user.name} />
+          <AvatarFallback>{user.name.slice(0, 2).toUpperCase()}</AvatarFallback>
+        </Avatar>
+      )}
+      {/* Bubble and timestamp */}
+      <div className={cn("flex flex-col items-start", isCurrentUser && "items-end")}> 
+        <div
+          className={cn(
+            "max-w-[70%] min-w-[60px] px-4 py-2 rounded-2xl shadow-sm relative",
+            isCurrentUser
+              ? "bg-blue-600 text-white ml-2 rounded-br-md"
+              : "bg-gray-100 text-gray-900 mr-2 rounded-bl-md border border-gray-200"
+          )}
+        >
+          <div className="flex items-center justify-between mb-1">
+            <span className={cn(
+              "text-xs font-semibold",
+              isCurrentUser ? "text-white/80" : "text-gray-700"
+            )}>{user.name}</span>
+          </div>
+          <div className="break-words text-sm leading-relaxed">
+            {message.content}
+          </div>
         </div>
-        <p className="text-muted-foreground break-words">{message.content}</p>
+        <span
+          className={cn(
+            "text-[10px] mt-1",
+            isCurrentUser ? "text-right text-white/60 pr-2" : "text-left text-gray-500 pl-2"
+          )}
+        >
+          {new Date(message.timestamp).toLocaleTimeString()}
+        </span>
       </div>
+      {/* Avatar for current user (right) */}
+      {isCurrentUser && (
+        <Avatar className="h-8 w-8 ml-2">
+          <AvatarImage src={user.avatar} alt={user.name} />
+          <AvatarFallback>{user.name.slice(0, 2).toUpperCase()}</AvatarFallback>
+        </Avatar>
+      )}
     </div>
   );
 };

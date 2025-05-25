@@ -52,35 +52,23 @@ const communitySchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User'
     }],
+    blockedMembers: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
+    }],
     rules: [ruleSchema],
     posts: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Post'
     }],
+    itineraries: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'CommunityItinerary'
+    }],
     isPrivate: {
         type: Boolean,
         default: false
     },
-    channels: [{
-        _id: { 
-            type: mongoose.Schema.Types.ObjectId,
-            default: () => new mongoose.Types.ObjectId(),
-            required: true
-        },
-        channelName: { 
-            type: String, 
-            required: true 
-        },
-        createdBy: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: 'User',
-            required: true
-        },
-        createdAt: {
-            type: Date,
-            default: Date.now
-        }
-    }]
 }, {
     timestamps: true,
     toJSON: { 
@@ -95,7 +83,7 @@ const communitySchema = new mongoose.Schema({
 
 // Virtual for member count
 communitySchema.virtual('memberCount').get(function() {
-    return this.members.length;
+    return this.members ? this.members.length : 0;
 });
 
 // Update text index for search with weights
