@@ -45,7 +45,10 @@ if (!process.env.MONGO_URI) {
 const app = express();
 
 // Middlewares
-app.use(cors());
+app.use(cors({
+    origin: 'https://www.explorely.me', // ✅ must match your frontend domain exactly
+    credentials: true
+}));
 app.use(express.json());
 app.use(cookieParser());
 
