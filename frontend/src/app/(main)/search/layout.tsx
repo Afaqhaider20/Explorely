@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+
 export default function SearchLayout({
   children,
 }: {
@@ -5,7 +7,9 @@ export default function SearchLayout({
 }) {
   return (
     <div className="min-h-screen pt-[4rem]">
-      {children}
+      <Suspense fallback={<span>Loading...</span>}>
+        {children}
+      </Suspense>
     </div>
   );
 }
