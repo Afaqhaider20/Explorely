@@ -163,6 +163,37 @@ export function PostCard({
     }
     
     setIsVoting(true);
+    
+    // Optimistic update
+    const previousVoteCount = currentVoteCount;
+    const previousIsUpvoted = isUpvoted;
+    const previousIsDownvoted = isDownvoted;
+    
+    // Calculate new vote count
+    let newVoteCount = currentVoteCount;
+    if (voteType === 'upvote') {
+      if (isUpvoted) {
+        newVoteCount -= 1;
+        setIsUpvoted(false);
+      } else {
+        newVoteCount += 1;
+        if (isDownvoted) newVoteCount += 1;
+        setIsUpvoted(true);
+        setIsDownvoted(false);
+      }
+    } else {
+      if (isDownvoted) {
+        newVoteCount += 1;
+        setIsDownvoted(false);
+      } else {
+        newVoteCount -= 1;
+        if (isUpvoted) newVoteCount -= 1;
+        setIsDownvoted(true);
+        setIsUpvoted(false);
+      }
+    }
+    setCurrentVoteCount(newVoteCount);
+
     try {
       const response = await axios.post(
         getApiUrl(`api/posts/${_id}/${voteType}`),
@@ -182,6 +213,10 @@ export function PostCard({
         toast.success(`Successfully ${voteType}d the post`);
       }
     } catch (error) {
+      // Revert optimistic update on error
+      setCurrentVoteCount(previousVoteCount);
+      setIsUpvoted(previousIsUpvoted);
+      setIsDownvoted(previousIsDownvoted);
       toast.error(error instanceof Error ? error.message : 'Failed to vote. Please try again.');
     } finally {
       setIsVoting(false);
@@ -199,31 +234,10 @@ export function PostCard({
     toast.success('Link copied to clipboard!');
   };
 
-  const handleReport = async (reason: string) => {
+  const handleReport = async () => {
     if (!token || !user) {
       toast.error('Authentication required');
       return;
-    }
-
-    try {
-      await axios.post(
-        getApiUrl('api/reports'),
-        {
-          reportedType: 'post',
-          reportedItemId: _id,
-          reason
-        },
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-      toast.success('Report submitted successfully');
-    } catch (error) {
-      console.error('Error submitting report:', error);
-      toast.error('Failed to submit report');
     }
     setIsReportDialogOpen(false);
   };
@@ -360,7 +374,24 @@ export function PostCard({
 
       <CardContent className="p-3 sm:p-4 pt-3 sm:pt-4 cursor-pointer" onClick={!isDetailView ? handlePostClick : undefined}>
         <h3 className="text-lg sm:text-xl font-bold mb-1 sm:mb-2 line-clamp-2 text-secondary">{title}</h3>
-        <p className="text-sm sm:text-base text-muted-foreground mt-1 line-clamp-3">{content}</p>
+        <div className="text-sm sm:text-base text-muted-foreground mt-1">
+          {isDetailView ? (
+            <p>{content}</p>
+          ) : (
+            <div>
+              <p className="line-clamp-3">{content}</p>
+              {content.length > 150 && content.split('\n').length > 3 && (
+                <Link 
+                  href={`/posts/${_id}`}
+                  className="text-primary hover:underline text-sm mt-1 inline-block"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  Read more
+                </Link>
+              )}
+            </div>
+          )}
+        </div>
         
         {media && (
           <div

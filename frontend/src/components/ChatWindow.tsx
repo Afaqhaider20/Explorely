@@ -1,7 +1,7 @@
 import { useRef, useEffect } from "react";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import { format, isToday, isYesterday } from "date-fns";
+import { Message } from "./Message";
 
 interface ChatMessage {
   _id: string;
@@ -105,31 +105,11 @@ export function ChatWindow({
               </div>
             </div>
             {group.messages.map((message) => (
-              <div
+              <Message
                 key={message._id}
-                className={cn(
-                  "flex items-start gap-3",
-                  message.user._id === currentUserId ? "flex-row-reverse" : ""
-                )}
-              >
-                <Avatar className="h-8 w-8">
-                  <AvatarImage src={message.user.avatar} alt={message.user.username} />
-                  <AvatarFallback>{message.user.username.slice(0, 2).toUpperCase()}</AvatarFallback>
-                </Avatar>
-                <div
-                  className={cn(
-                    "rounded-lg px-4 py-2 max-w-[70%]",
-                    message.user._id === currentUserId
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted"
-                  )}
-                >
-                  <p className="text-sm">{message.content}</p>
-                  <p className="text-xs mt-1 opacity-70">
-                    {format(new Date(message.timestamp), "h:mm a")}
-                  </p>
-                </div>
-              </div>
+                message={message}
+                currentUserId={currentUserId}
+              />
             ))}
           </div>
         ))}

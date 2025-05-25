@@ -112,8 +112,13 @@ export function ReviewCard({
       return;
     }
 
+    // Optimistically update the UI
+    const previousLikes = likes;
+    const previousIsLiked = isLiked;
+    setLikes(prev => isLiked ? prev - 1 : prev + 1);
+    setIsLiked(prev => !prev);
+
     try {
-      // Prevent multiple clicks while request is processing
       const response = await axios.post(
         getApiUrl(`api/reviews/${_id}/like`),
         {},
@@ -125,14 +130,16 @@ export function ReviewCard({
         }
       );
 
-      if (response.data.status === 'success') {
-        const { hasLiked } = response.data.data;
-        setIsLiked(hasLiked);
-        setLikes(prev => hasLiked ? prev + 1 : prev - 1);
-      } else {
+      if (response.data.status !== 'success') {
+        // Revert optimistic update if the request failed
+        setLikes(previousLikes);
+        setIsLiked(previousIsLiked);
         throw new Error(response.data.message || 'Failed to update like status');
       }
     } catch (error) {
+      // Revert optimistic update if there was an error
+      setLikes(previousLikes);
+      setIsLiked(previousIsLiked);
       console.error('Error liking review:', error);
       if (axios.isAxiosError(error) && error.response?.data?.message) {
         toast.error(error.response.data.message);

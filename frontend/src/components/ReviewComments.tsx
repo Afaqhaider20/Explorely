@@ -117,33 +117,35 @@ const CommentTextarea = ({
             defaultValue={defaultValue}
           />
           <div className="absolute bottom-2 right-2 flex items-center gap-1">
-            <button
-              type="button"
-              onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-              className="p-1.5 hover:bg-muted rounded-md transition-colors text-muted-foreground hover:text-foreground"
-              title="Add emoji"
-            >
-              <Smile className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-        {showEmojiPicker && (
-          <div className="absolute bottom-0 right-0 z-50 emoji-picker-container -translate-y-full mb-2">
-            <div className="rounded-lg shadow-lg border bg-background">
-              <EmojiPicker
-                onEmojiClick={onEmojiClick}
-                width={250}
-                height={300}
-                searchDisabled
-                skinTonesDisabled
-                previewConfig={{
-                  showPreview: false
-                }}
-                theme={Theme.LIGHT}
-              />
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                className="p-1.5 hover:bg-muted rounded-md transition-colors text-muted-foreground hover:text-foreground hidden md:flex"
+                title="Add emoji"
+              >
+                <Smile className="h-4 w-4" />
+              </button>
+              {showEmojiPicker && (
+                <div className="absolute bottom-full right-0 z-50 emoji-picker-container">
+                  <div className="rounded-lg shadow-lg border bg-background">
+                    <EmojiPicker
+                      onEmojiClick={onEmojiClick}
+                      width={250}
+                      height={300}
+                      searchDisabled
+                      skinTonesDisabled
+                      previewConfig={{
+                        showPreview: false
+                      }}
+                      theme={Theme.LIGHT}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
-        )}
+        </div>
       </div>
       <div className="flex justify-end gap-2 mt-3">
         <Button 
@@ -205,6 +207,28 @@ export function ReviewComments({ reviewId, onCommentAdded }: ReviewCommentsProps
       return;
     }
 
+    // Optimistically update the UI
+    setLikedComments(prev => {
+      const newSet = new Set(prev);
+      if (!newSet.has(commentId)) {
+        newSet.add(commentId);
+      } else {
+        newSet.delete(commentId);
+      }
+      return newSet;
+    });
+
+    // Optimistically update the like count
+    setComments(prevComments => {
+      return prevComments.map(comment => {
+        if (comment._id === commentId) {
+          const newLikeCount = comment.likeCount + (likedComments.has(commentId) ? -1 : 1);
+          return { ...comment, likeCount: newLikeCount };
+        }
+        return comment;
+      });
+    });
+
     try {
       const response = await axios.post(
         getApiUrl(`api/reviews/${reviewId}/comments/${commentId}/like`),
@@ -219,6 +243,7 @@ export function ReviewComments({ reviewId, onCommentAdded }: ReviewCommentsProps
 
       const data = response.data.data;
       
+      // Update local state based on the response
       setLikedComments(prev => {
         const newSet = new Set(prev);
         if (data.hasLiked) {
@@ -238,6 +263,27 @@ export function ReviewComments({ reviewId, onCommentAdded }: ReviewCommentsProps
     } catch (error) {
       console.error("Error toggling like:", error);
       toast.error("Failed to update like status");
+
+      // Revert optimistic updates on error
+      setLikedComments(prev => {
+        const newSet = new Set(prev);
+        if (newSet.has(commentId)) {
+          newSet.delete(commentId);
+        } else {
+          newSet.add(commentId);
+        }
+        return newSet;
+      });
+
+      setComments(prevComments => {
+        return prevComments.map(comment => {
+          if (comment._id === commentId) {
+            const newLikeCount = comment.likeCount + (likedComments.has(commentId) ? 1 : -1);
+            return { ...comment, likeCount: newLikeCount };
+          }
+          return comment;
+        });
+      });
     }
   };
   
@@ -253,8 +299,30 @@ export function ReviewComments({ reviewId, onCommentAdded }: ReviewCommentsProps
 
   const handleSubmitComment = async (content: string) => {
     setSubmitting(true);
+
+    // Create a temporary comment object
+    const tempComment: CommentData = {
+      _id: `temp-${Date.now()}`,
+      content,
+      author: {
+        _id: user!._id,
+        username: user!.username,
+        avatar: user!.avatar || '',
+      },
+      review: reviewId,
+      parentComment: null,
+      likes: [],
+      likeCount: 0,
+      isEdited: false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    // Optimistically add the comment to the UI
+    setComments(prevComments => [tempComment, ...prevComments]);
+
     try {
-      await axios.post(
+      const response = await axios.post(
         getApiUrl(`api/reviews/${reviewId}/comments`),
         { content },
         {
@@ -265,11 +333,22 @@ export function ReviewComments({ reviewId, onCommentAdded }: ReviewCommentsProps
         }
       );
 
+      // Replace the temporary comment with the real one
+      setComments(prevComments => 
+        prevComments.map(comment => 
+          comment._id === tempComment._id ? response.data.data.comment : comment
+        )
+      );
+
       setActiveTextarea(false);
       toast.success("Comment posted successfully");
-      fetchComments();
       onCommentAdded?.();
     } catch (error) {
+      // Remove the temporary comment on error
+      setComments(prevComments => 
+        prevComments.filter(comment => comment._id !== tempComment._id)
+      );
+
       toast.error(error instanceof Error ? error.message : "Failed to post comment");
     } finally {
       setSubmitting(false);

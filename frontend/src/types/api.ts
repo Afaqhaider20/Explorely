@@ -38,6 +38,7 @@ export interface RegisterCredentials {
 export interface Message {
   _id: string;
   content: string;
+  isImage: boolean;
   sender: {
     _id: string;
     username: string;

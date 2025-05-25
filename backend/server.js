@@ -46,7 +46,7 @@ const app = express();
 
 // Middlewares
 app.use(cors({
-    origin: 'https://www.explorely.me', // ✅ must match your frontend domain exactly
+    origin: process.env.FRONTEND_URL,
     credentials: true
 }));
 app.use(express.json());
@@ -81,6 +81,7 @@ const io = require('./socket')(server);
 app.use((err, req, res, next) => {
     console.error(err.stack);
     res.status(500).json({ message: 'Something broke!' });
+    console.log(err);
 });
 
 const PORT = process.env.PORT || 5000;

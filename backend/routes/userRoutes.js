@@ -148,10 +148,14 @@ router.get('/communities-last-messages', protect, async (req, res) => {
           lastMessage: lastMessage ? {
             content: lastMessage.content,
             timestamp: lastMessage.timestamp,
-            sender: {
+            sender: lastMessage.user ? {
               _id: lastMessage.user._id,
               username: lastMessage.user.username,
               avatar: lastMessage.user.avatar
+            } : {
+              _id: 'deleted',
+              username: 'Deleted User',
+              avatar: null
             }
           } : null,
           messageCount,

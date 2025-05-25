@@ -3,7 +3,7 @@
 import { ReviewCard } from "@/components/ReviewCard";
 import { CreateReviewDialog } from "@/components/CreateReviewDialog";
 import { Button } from "@/components/ui/button";
-import { Plus, MessagesSquare, Search, ArrowUpDown, Star } from "lucide-react";
+import { Plus, MessagesSquare, Search, ArrowUpDown, Star, Loader2 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -51,21 +51,25 @@ export default function ReviewsPage() {
   const [reviews, setReviews] = useState<Review[]>([]);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const searchTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
-  const previousResultsRef = useRef<Review[]>([]);
+  const loaderRef = useRef<HTMLDivElement>(null);
 
-  const fetchReviews = useCallback(async (reset = false) => {
+  const fetchReviews = useCallback(async (pageNumber: number, append: boolean = false) => {
     try {
-      setIsLoading(true);
-      const currentPage = reset ? 1 : page;
-      
+      if (pageNumber > 1) {
+        setLoadingMore(true);
+      } else {
+        setIsLoading(true);
+      }
+
       const endpoint = searchQuery 
         ? `${process.env.NEXT_PUBLIC_API_URL}/api/reviews/search`
         : `${process.env.NEXT_PUBLIC_API_URL}/api/reviews`;
 
       const response = await axios.get(endpoint, {
         params: {
-          page: currentPage,
+          page: pageNumber,
           limit: 10,
           category: activeTab === 'all' ? undefined : activeTab,
           sort: sortBy,
@@ -75,38 +79,38 @@ export default function ReviewsPage() {
 
       const newReviews = response.data.data.reviews;
       
-      if (reset) {
-        setReviews(newReviews);
-        previousResultsRef.current = newReviews;
-      } else {
+      if (append) {
         setReviews(prev => [...prev, ...newReviews]);
-        previousResultsRef.current = [...previousResultsRef.current, ...newReviews];
+      } else {
+        setReviews(newReviews);
       }
       
       setHasMore(newReviews.length === 10);
-      if (!reset) setPage(prev => prev + 1);
+      setPage(pageNumber);
     } catch (error) {
       console.error('Error fetching reviews:', error);
       toast.error('Failed to load reviews');
-      if (reset) {
+      if (!append) {
         setReviews([]);
-        previousResultsRef.current = [];
+        setPage(1);
       }
     } finally {
       setIsLoading(false);
+      setLoadingMore(false);
       setIsSearching(false);
     }
-  }, [page, activeTab, sortBy, searchQuery]);
+  }, [activeTab, sortBy, searchQuery]);
+
+  const loadMoreReviews = useCallback(() => {
+    if (!loadingMore && hasMore) {
+      const nextPage = page + 1;
+      fetchReviews(nextPage, true);
+    }
+  }, [loadingMore, hasMore, page, fetchReviews]);
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setSearchQuery(value);
-    
-    // Store current results before search
-    if (!isSearching) {
-      previousResultsRef.current = reviews;
-    }
-    
     setIsSearching(true);
     
     if (searchTimeoutRef.current) {
@@ -115,13 +119,13 @@ export default function ReviewsPage() {
     
     searchTimeoutRef.current = setTimeout(() => {
       setPage(1);
-      fetchReviews(true);
+      fetchReviews(1, false);
     }, 500);
   };
 
   useEffect(() => {
     setPage(1);
-    fetchReviews(true);
+    fetchReviews(1, false);
   }, [activeTab, sortBy, fetchReviews]);
 
   useEffect(() => {
@@ -131,6 +135,24 @@ export default function ReviewsPage() {
       }
     };
   }, []);
+
+  // Set up intersection observer for infinite scrolling
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loadingMore && !isLoading) {
+          loadMoreReviews();
+        }
+      },
+      { threshold: 0.5 }
+    );
+
+    if (loaderRef.current) {
+      observer.observe(loaderRef.current);
+    }
+
+    return () => observer.disconnect();
+  }, [hasMore, loadingMore, isLoading, loadMoreReviews]);
 
   const handleCreateReview = async (data: ReviewData) => {
     try {
@@ -321,21 +343,27 @@ export default function ReviewsPage() {
               <LoadingSkeletons />
             ) : reviews.length > 0 ? (
               <>
-                <div className="grid grid-cols-1 gap-4 md:gap-6">
-                  {reviews.map((review) => (
-                    <ReviewCard key={review._id} {...review} />
+                <div className="space-y-6">
+                  {reviews.map((review, index) => (
+                    <div
+                      key={review._id}
+                      ref={index === reviews.length - 1 ? loaderRef : undefined}
+                    >
+                      <ReviewCard {...review} />
+                    </div>
                   ))}
                 </div>
-                {hasMore && (
-                  <div className="flex justify-center pt-4 md:pt-8">
-                    <Button
-                      variant="outline"
-                      onClick={() => fetchReviews()}
-                      disabled={isLoading}
-                      className="w-full sm:w-auto px-4 py-2 sm:px-8 sm:py-6 text-sm sm:text-base"
-                    >
-                      {isLoading ? 'Loading...' : 'Load More Reviews'}
-                    </Button>
+                <div ref={loaderRef} className="py-4 flex justify-center">
+                  {loadingMore && (
+                    <div className="flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span className="text-sm text-muted-foreground">Loading more reviews...</span>
+                    </div>
+                  )}
+                </div>
+                {!hasMore && reviews.length > 0 && (
+                  <div className="text-center py-4 text-muted-foreground">
+                    <p>You&apos;ve reached the end. No more reviews to load.</p>
                   </div>
                 )}
               </>

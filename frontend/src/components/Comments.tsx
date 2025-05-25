@@ -127,7 +127,7 @@ const CommentTextarea = ({
               <button
                 type="button"
                 onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                className="p-1.5 hover:bg-muted rounded-md transition-colors text-muted-foreground hover:text-foreground"
+                className="p-1.5 hover:bg-muted rounded-md transition-colors text-muted-foreground hover:text-foreground hidden md:flex"
                 title="Add emoji"
               >
                 <Smile className="h-4 w-4" />
@@ -213,6 +213,40 @@ export function Comments({ postId, type = 'post', onCommentAdded }: CommentsProp
       return;
     }
 
+    // Optimistically update the UI
+    setLikedComments(prev => {
+      const newSet = new Set(prev);
+      if (!newSet.has(commentId)) {
+        newSet.add(commentId);
+      } else {
+        newSet.delete(commentId);
+      }
+      return newSet;
+    });
+
+    // Optimistically update the like count
+    setComments(prevComments => {
+      return prevComments.map(comment => {
+        if (comment._id === commentId) {
+          const newLikeCount = comment.likeCount + (likedComments.has(commentId) ? -1 : 1);
+          return { ...comment, likeCount: newLikeCount };
+        }
+        if (comment.replies && comment.replies.length > 0) {
+          return {
+            ...comment,
+            replies: comment.replies.map(reply => {
+              if (reply._id === commentId) {
+                const newLikeCount = reply.likeCount + (likedComments.has(commentId) ? -1 : 1);
+                return { ...reply, likeCount: newLikeCount };
+              }
+              return reply;
+            })
+          };
+        }
+        return comment;
+      });
+    });
+
     try {
       const response = await axios.post(
         `${process.env.NEXT_PUBLIC_API_URL}/api/comments/${commentId}/like`,
@@ -249,6 +283,39 @@ export function Comments({ postId, type = 'post', onCommentAdded }: CommentsProp
     } catch (error) {
       console.error("Error toggling like:", error);
       toast.error("Failed to update like status");
+      
+      // Revert optimistic updates on error
+      setLikedComments(prev => {
+        const newSet = new Set(prev);
+        if (newSet.has(commentId)) {
+          newSet.delete(commentId);
+        } else {
+          newSet.add(commentId);
+        }
+        return newSet;
+      });
+
+      setComments(prevComments => {
+        return prevComments.map(comment => {
+          if (comment._id === commentId) {
+            const newLikeCount = comment.likeCount + (likedComments.has(commentId) ? 1 : -1);
+            return { ...comment, likeCount: newLikeCount };
+          }
+          if (comment.replies && comment.replies.length > 0) {
+            return {
+              ...comment,
+              replies: comment.replies.map(reply => {
+                if (reply._id === commentId) {
+                  const newLikeCount = reply.likeCount + (likedComments.has(commentId) ? 1 : -1);
+                  return { ...reply, likeCount: newLikeCount };
+                }
+                return reply;
+              })
+            };
+          }
+          return comment;
+        });
+      });
     }
   };
   
@@ -272,8 +339,47 @@ export function Comments({ postId, type = 'post', onCommentAdded }: CommentsProp
 
   const handleSubmitComment = async (content: string, parentCommentId: string | null) => {
     setSubmitting(true);
+    
+    // Create a temporary comment object
+    const tempComment: CommentData = {
+      _id: `temp-${Date.now()}`,
+      content,
+      author: {
+        _id: user!._id,
+        username: user!.username,
+        avatar: user!.avatar || '',
+      },
+      post: postId,
+      parentComment: parentCommentId,
+      level: parentCommentId ? 1 : 0,
+      likes: [],
+      likeCount: 0,
+      isEdited: false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    // Optimistically add the comment to the UI
+    setComments(prevComments => {
+      if (parentCommentId) {
+        // Add as a reply
+        return prevComments.map(comment => {
+          if (comment._id === parentCommentId) {
+            return {
+              ...comment,
+              replies: [...(comment.replies || []), tempComment],
+            };
+          }
+          return comment;
+        });
+      } else {
+        // Add as a top-level comment
+        return [tempComment, ...prevComments];
+      }
+    });
+
     try {
-      await axios.post(
+      const response = await axios.post(
         getApiUrl(`api/${type}/${postId}/comments`),
         { content, parentCommentId },
         {
@@ -284,11 +390,48 @@ export function Comments({ postId, type = 'post', onCommentAdded }: CommentsProp
         }
       );
 
+      // Replace the temporary comment with the real one
+      setComments(prevComments => {
+        if (parentCommentId) {
+          return prevComments.map(comment => {
+            if (comment._id === parentCommentId) {
+              return {
+                ...comment,
+                replies: comment.replies?.map(reply => 
+                  reply._id === tempComment._id ? response.data.data.comment : reply
+                ) || [],
+              };
+            }
+            return comment;
+          });
+        } else {
+          return prevComments.map(comment => 
+            comment._id === tempComment._id ? response.data.data.comment : comment
+          );
+        }
+      });
+
       setActiveTextarea(null);
       toast.success(parentCommentId ? "Reply posted successfully" : "Comment posted successfully");
-      fetchComments();
       onCommentAdded?.();
     } catch (error) {
+      // Remove the temporary comment on error
+      setComments(prevComments => {
+        if (parentCommentId) {
+          return prevComments.map(comment => {
+            if (comment._id === parentCommentId) {
+              return {
+                ...comment,
+                replies: comment.replies?.filter(reply => reply._id !== tempComment._id) || [],
+              };
+            }
+            return comment;
+          });
+        } else {
+          return prevComments.filter(comment => comment._id !== tempComment._id);
+        }
+      });
+
       toast.error(error instanceof Error ? error.message : "Failed to post comment");
     } finally {
       setSubmitting(false);

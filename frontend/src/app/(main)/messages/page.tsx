@@ -28,6 +28,7 @@ interface JoinedCommunity {
 interface ChatMessage {
   _id: string;
   content: string;
+  isImage: boolean;
   timestamp: string;
   community: string;
   user: {
@@ -346,7 +347,10 @@ export default function MessagesPage() {
           if (communityIndex === -1) {
             return [{
               community: { _id: data.communityId, name: '', avatar: '', description: '' }, 
-              lastMessage: data.lastMessage,
+              lastMessage: {
+                ...data.lastMessage,
+                content: data.lastMessage.content === '' ? 'Image' : data.lastMessage.content
+              },
               messageCount: 0, 
               unreadCount: 1, // Start with 1 for new communities
               lastRead: new Date().toISOString() 
@@ -354,7 +358,10 @@ export default function MessagesPage() {
           }
           const updated = [...prev];
           const [updatedCommunity] = updated.splice(communityIndex, 1);
-          updatedCommunity.lastMessage = data.lastMessage;
+          updatedCommunity.lastMessage = {
+            ...data.lastMessage,
+            content: data.lastMessage.content === '' ? 'Image' : data.lastMessage.content
+          };
           return [updatedCommunity, ...updated];
         }
         // Mark this message as processed
@@ -364,7 +371,10 @@ export default function MessagesPage() {
           console.log('Adding new community to list');
           return [{
             community: { _id: data.communityId, name: '', avatar: '', description: '' }, 
-            lastMessage: data.lastMessage,
+            lastMessage: {
+              ...data.lastMessage,
+              content: data.lastMessage.content === '' ? 'Image' : data.lastMessage.content
+            },
             messageCount: 0, 
             unreadCount: 1, // Start with 1 for new communities
             lastRead: new Date().toISOString() 
@@ -376,7 +386,10 @@ export default function MessagesPage() {
         const [updatedCommunity] = updated.splice(communityIndex, 1);
         
         // Update the community's data
-        updatedCommunity.lastMessage = data.lastMessage;
+        updatedCommunity.lastMessage = {
+          ...data.lastMessage,
+          content: data.lastMessage.content === '' ? 'Image' : data.lastMessage.content
+        };
         const shouldIncrement = data.lastMessage.sender._id !== user?._id && selectedCommunity?._id !== data.communityId;
         updatedCommunity.unreadCount = shouldIncrement 
           ? (updatedCommunity.unreadCount || 0) + 1 
@@ -544,11 +557,13 @@ export default function MessagesPage() {
 
     try {
       const messageContent = newMessage.trim();
+      const isImage = !!selectedImage;
       
       // Create a temporary message object
       const tempMessage: ChatMessage = {
         _id: 'temp-' + Date.now(),
-        content: messageContent,
+        content: isImage ? imagePreview || '' : messageContent,
+        isImage,
         timestamp: new Date().toISOString(),
         community: selectedCommunity._id,
         user: {
@@ -567,7 +582,8 @@ export default function MessagesPage() {
 
       // Emit the message to the server with acknowledgment
       socket.emit('send_message', {
-        content: messageContent,
+        content: isImage ? imagePreview || '' : messageContent,
+        isImage,
         communityId: selectedCommunity._id
       }, (error: Error | null) => {
         if (error) {
@@ -750,7 +766,7 @@ export default function MessagesPage() {
                           </div>
                         </div>
                         <div className="flex items-center justify-between mt-1">
-                          <p className="text-xs text-muted-foreground truncate">
+                          <p className="text-xs text-muted-foreground truncate w-40">
                             {communityData.lastMessage 
                               ? `${communityData.lastMessage.sender.username}: ${communityData.lastMessage.content}`
                               : communityData.messageCount > 0
@@ -875,7 +891,7 @@ export default function MessagesPage() {
                       type="button"
                       variant="ghost"
                       size="icon"
-                      className="h-6 w-6"
+                      className="h-6 w-6 hidden md:flex"
                       onClick={() => setShowEmojiPicker(!showEmojiPicker)}
                       disabled={!selectedCommunity || isChangingCommunity}
                     >

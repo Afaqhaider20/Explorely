@@ -238,51 +238,69 @@ router.get('/communities', protect, isAdmin, async (req, res) => {
     }
 
     const communities = await Community.find(query)
-      .select('_id name description avatar createdAt')
-      .populate('creator', 'username avatar')
+      .select('_id name description avatar createdAt members')
+      .populate({
+        path: 'creator',
+        select: 'username avatar',
+        options: { lean: true }
+      })
       .sort(sort)
       .skip(skip)
       .limit(limit);
 
     // Get report information for each community
     const communitiesWithReports = await Promise.all(communities.map(async (community) => {
-      const reports = await Report.find({ 
-        reportedType: 'community',
-        reportedCommunity: community._id,
-        status: { $ne: 'dismissed' }
-      }).select('reason');
+      try {
+        const reports = await Report.find({ 
+          reportedType: 'community',
+          reportedCommunity: community._id,
+          status: { $ne: 'dismissed' }
+        }).select('reason');
 
-      return {
-        _id: community._id,
-        name: community.name,
-        description: community.description,
-        avatar: community.avatar,
-        createdAt: community.createdAt,
-        creator: {
-          username: community.creator.username,
-          avatar: community.creator.avatar
-        },
-        memberCount: community.members ? community.members.length : 0,
-        reportCount: reports.length,
-        reports: reports.map(report => ({
-          reason: report.reason
-        }))
-      };
+        return {
+          _id: community._id,
+          name: community.name,
+          description: community.description,
+          avatar: community.avatar,
+          createdAt: community.createdAt,
+          creator: community.creator ? {
+            username: community.creator.username || 'Deleted User',
+            avatar: community.creator.avatar || 'default-avatar.png'
+          } : {
+            username: 'Deleted User',
+            avatar: 'default-avatar.png'
+          },
+          memberCount: Array.isArray(community.members) ? community.members.length : 0,
+          reportCount: reports.length,
+          reports: reports.map(report => ({
+            reason: report.reason
+          }))
+        };
+      } catch (error) {
+        console.error(`Error processing community ${community._id}:`, error);
+        return null;
+      }
     }));
+
+    // Filter out any null results from failed processing
+    const validCommunities = communitiesWithReports.filter(community => community !== null);
 
     const total = filter === 'reported' 
       ? await Community.countDocuments(query)
       : await Community.countDocuments();
 
     res.json({
-      communities: communitiesWithReports,
+      communities: validCommunities,
       currentPage: page,
       totalPages: Math.ceil(total / limit),
       totalCommunities: total
     });
   } catch (error) {
     console.error('Error fetching communities:', error);
-    res.status(500).json({ message: 'Internal server error' });
+    res.status(500).json({ 
+      message: 'Internal server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 });
 
