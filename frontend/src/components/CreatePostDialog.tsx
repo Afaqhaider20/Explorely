@@ -10,6 +10,7 @@ import { ImagePlus, Loader2, X } from "lucide-react"
 import { useAuth } from '@/store/AuthContext';
 import { toast } from "sonner"
 import Image from "next/image"
+import { getApiUrl } from "@/lib/config"
 
 interface CreatePostDialogProps {
   communityId: string;
@@ -106,7 +107,7 @@ export function CreatePostDialog({ communityId, communityName, trigger, onPostCr
         formData.append('media', media);
       }
 
-      const response = await fetch('http://localhost:5000/api/posts', {
+      const response = await fetch(getApiUrl('api/posts'), {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
