@@ -47,7 +47,7 @@ export default function ItinerariesPage() {
     console.log('Fetching itineraries with token:', token);
     setLoading(true);
     try {
-      const res = await axios.get('/api/useritineraries/mine', {
+      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/useritineraries/mine`, {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json'
