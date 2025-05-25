@@ -82,40 +82,36 @@ module.exports = (server) => {
     // Handle new messages
     socket.on('send_message', async (data, callback) => {
       try {
-        // Only log event and IDs for debugging
-        console.log('Received send_message event', {
-          communityId: data.communityId,
-          userId: socket.user._id
-        });
-        const { content, communityId } = data;
+        // Log message event
+        console.log(`📨 New message from user ${socket.user.username} in community ${data.communityId}`);
+
+        const { content, communityId, isImage } = data;
 
         // Verify user is a member of the community
         const community = await Community.findById(communityId);
-        console.log('Found community:', {
-          communityId,
-          exists: !!community,
-          isMember: community ? community.members.includes(socket.user._id) : false
-        });
+        if (!community) {
+          console.log(`❌ Community ${communityId} not found`);
+          if (callback) callback(new Error('Community not found'));
+          return;
+        }
 
-        if (!community || !community.members.includes(socket.user._id)) {
-          console.log('User not authorized to send message', {
-            userId: socket.user._id,
-            communityId
-          });
+        if (!community.members.includes(socket.user._id)) {
+          console.log(`❌ User ${socket.user.username} is not a member of community ${community.name}`);
           if (callback) callback(new Error('Not authorized to send messages to this community'));
           return;
         }
 
         // Create and save the message
         const newMessage = new Message({
-          content,
+          content: isImage ? '' : content,
+          isImage: isImage || false,
           user: socket.user._id,
           community: communityId,
           timestamp: new Date()
         });
 
         await newMessage.save();
-        console.log('Message saved successfully:', { messageId: newMessage._id });
+        console.log(`✅ Message saved successfully (ID: ${newMessage._id})`);
 
         // Populate user data for the response
         const populatedMessage = await Message.findById(newMessage._id)
@@ -124,35 +120,24 @@ module.exports = (server) => {
 
         // Get all members of the community
         const communityMembers = await User.find({ _id: { $in: community.members } });
-        console.log('Found community members:', {
-          count: communityMembers.length
-        });
+        console.log(`👥 Processing ${communityMembers.length} community members for unread updates`);
 
         // Emit the message to online users in the community room
         io.to(communityId).emit('new_message', populatedMessage);
-        console.log('Emitted new_message event to room:', communityId);
+        console.log(`📢 Message broadcasted to room ${communityId}`);
 
         // Update unread messages for offline users and those not in the chat
         const onlineUsersInRoom = Array.from(io.sockets.adapter.rooms.get(communityId) || []);
-        console.log('Online users in room:', {
-          roomId: communityId,
-          count: onlineUsersInRoom.length
-        });
+        console.log(`👥 ${onlineUsersInRoom.length} users currently in chat room`);
         
         // Process all community members for unread updates
         for (const member of communityMembers) {
           const userSocketId = onlineUsers.get(member._id.toString());
           const isInChatRoom = userSocketId && onlineUsersInRoom.includes(userSocketId);
           
-          console.log('Processing member for unread count:', {
-            userId: member._id.toString(),
-            isOnline: !!userSocketId,
-            isInChatRoom
-          });
-
           // Skip if user is in the chat room
           if (isInChatRoom) {
-            console.log('Skipping unread count for user in chat room:', member._id.toString());
+            console.log(`⏭️ Skipping unread count for ${member.username} (in chat room)`);
             continue;
           }
 
@@ -162,13 +147,6 @@ module.exports = (server) => {
             msg => msg.community.toString() === communityId
           )?.count || 0;
 
-          console.log('Updating unread count for user:', {
-            userId: member._id.toString(),
-            communityId,
-            currentCount: currentUnreadCount,
-            isOnline: !!userSocketId
-          });
-
           // Update unread count
           const updateResult = await User.updateOne(
             { _id: member._id, 'unreadMessages.community': communityId },
@@ -176,10 +154,7 @@ module.exports = (server) => {
           );
 
           if (updateResult.matchedCount === 0) {
-            console.log('Creating new unread message entry for user:', {
-              userId: member._id.toString(),
-              communityId
-            });
+            console.log(`📝 Creating new unread message entry for ${member.username}`);
             // No matching unreadMessages entry, so push a new one
             await User.updateOne(
               { _id: member._id },
@@ -194,12 +169,7 @@ module.exports = (server) => {
               }
             );
           } else {
-            console.log('Updated existing unread count:', {
-              userId: member._id.toString(),
-              communityId,
-              previousCount: currentUnreadCount,
-              newCount: currentUnreadCount + 1
-            });
+            console.log(`📊 Updated unread count for ${member.username}: ${currentUnreadCount} → ${currentUnreadCount + 1}`);
           }
 
           // If user is online, send them the last message update
@@ -208,7 +178,7 @@ module.exports = (server) => {
               communityId,
               lastMessage: {
                 _id: populatedMessage._id,
-                content: populatedMessage.content,
+                content: populatedMessage.isImage ? '' : populatedMessage.content,
                 timestamp: populatedMessage.timestamp,
                 sender: {
                   _id: populatedMessage.user._id,
@@ -217,14 +187,14 @@ module.exports = (server) => {
                 }
               }
             });
-            console.log('Emitted last message update to online user:', userSocketId);
+            console.log(`📨 Sent last message update to ${member.username} in community ${community.name} (${populatedMessage.isImage ? 'Image' : populatedMessage.content})`);
           }
         }
 
         // Acknowledge successful message sending
         if (callback) callback(null);
       } catch (error) {
-        console.error('Error in send_message handler:', error.message);
+        console.error(`❌ Error in send_message handler: ${error.message}`);
         if (callback) callback(new Error('Failed to send message'));
       }
     });
@@ -232,6 +202,7 @@ module.exports = (server) => {
     // Handle typing indicator
     socket.on('typing', (data) => {
       const { communityId, isTyping } = data;
+      console.log(`⌨️ ${socket.user.username} is ${isTyping ? 'typing' : 'not typing'} in community ${communityId}`);
       socket.to(communityId).emit('user_typing', {
         userId: socket.user._id,
         username: socket.user.username,
@@ -243,6 +214,7 @@ module.exports = (server) => {
     socket.on('mark_messages_read', async (data) => {
       try {
         const { communityId } = data;
+        console.log(`📖 ${socket.user.username} marked messages as read in community ${communityId}`);
         
         // Update the user's last read timestamp and reset unread count
         await User.findOneAndUpdate(
@@ -265,6 +237,7 @@ module.exports = (server) => {
           communityId 
         });
       } catch (error) {
+        console.error(`❌ Failed to mark messages as read: ${error.message}`);
         socket.emit('error', 'Failed to mark messages as read');
       }
     });
@@ -272,8 +245,11 @@ module.exports = (server) => {
     // Handle disconnection
     socket.on('disconnect', async () => {
       try {
+        console.log(`👋 User ${socket.user.username} disconnected`);
+        
         // Get all communities the user is a member of
         const communities = await Community.find({ members: socket.user._id });
+        console.log(`📊 Processing ${communities.length} communities for last read updates`);
         
         // For each community, check if there are any new messages since last read
         for (const community of communities) {
@@ -291,6 +267,7 @@ module.exports = (server) => {
 
           // Only mark as unread if there's a new message after the last read
           if (lastMessage && lastMessage.timestamp > lastReadTimestamp) {
+            console.log(`📝 Updating last read timestamp for ${socket.user.username} in community ${community.name}`);
             // Update only this community's lastRead timestamp
             await User.findByIdAndUpdate(socket.user._id, {
               $set: {
@@ -304,7 +281,7 @@ module.exports = (server) => {
           }
         }
       } catch (error) {
-        // Handle error silently
+        console.error(`❌ Error in disconnect handler: ${error.message}`);
       }
 
       onlineUsers.delete(socket.user._id.toString());
