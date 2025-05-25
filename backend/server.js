@@ -46,7 +46,7 @@ const app = express();
 
 // Middlewares
 app.use(cors({
-    origin: process.env.FRONTEND_URL,
+    origin: "https://explorely.me",
     credentials: true
 }));
 app.use(express.json());
