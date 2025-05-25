@@ -11,6 +11,7 @@ import axios from "axios";
 import { toast } from "sonner";
 import Link from "next/link";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { getApiUrl } from "@/lib/config";
 
 interface Community {
   _id: string;
@@ -54,7 +55,7 @@ export default function CommunitiesTab() {
     setCommunityLoading(true);
 
     try {
-      const baseUrl = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/admin/communities`;
+      const baseUrl = getApiUrl('api/admin/communities');
       const url = search
         ? `${baseUrl}/search?query=${encodeURIComponent(search)}&page=${page}&filter=${filter}`
         : `${baseUrl}?page=${page}&filter=${filter}`;
@@ -103,7 +104,7 @@ export default function CommunitiesTab() {
 
     try {
       await axios.delete(
-        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/admin/communities/${communityId}`,
+        getApiUrl(`api/admin/communities/${communityId}`),
         {
           headers: {
             Authorization: `Bearer ${token}`,

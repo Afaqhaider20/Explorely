@@ -11,6 +11,7 @@ import axios from "axios";
 import { toast } from "sonner";
 import { useAuth } from "@/store/AuthContext";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { getApiUrl } from "@/lib/config";
 
 // Post interface
 interface Post {
@@ -59,7 +60,7 @@ export default function PostsTab() {
     setIsLoading(true);
 
     try {
-      const baseUrl = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/admin/posts`;
+      const baseUrl = getApiUrl('api/admin/posts');
       const url = search
         ? `${baseUrl}/search?query=${encodeURIComponent(search)}&page=${page}&filter=${filter}`
         : `${baseUrl}?page=${page}&filter=${filter}`;
@@ -109,7 +110,7 @@ export default function PostsTab() {
 
     try {
       await axios.delete(
-        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/admin/posts/${postId}`,
+        getApiUrl(`api/admin/posts/${postId}`),
         {
           headers: {
             Authorization: `Bearer ${token}`,

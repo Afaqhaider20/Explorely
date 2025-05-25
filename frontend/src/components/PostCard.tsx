@@ -33,6 +33,7 @@ import {
   AlertDialogAction,
   AlertDialogCancel,
 } from "@/components/ui/alert-dialog";
+import { getApiUrl } from "@/lib/config";
 
 export interface PostCardProps {
   _id: string;
@@ -109,7 +110,7 @@ export function PostCard({
       if (!user) return;
       
       try {
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/posts/${_id}/vote-status`, {
+        const response = await fetch(getApiUrl(`api/posts/${_id}/vote-status`), {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
@@ -164,7 +165,7 @@ export function PostCard({
     setIsVoting(true);
     try {
       const response = await axios.post(
-        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/posts/${_id}/${voteType}`,
+        getApiUrl(`api/posts/${_id}/${voteType}`),
         {},
         {
           headers: {
@@ -206,7 +207,7 @@ export function PostCard({
 
     try {
       await axios.post(
-        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/reports`,
+        getApiUrl('api/reports'),
         {
           reportedType: 'post',
           reportedItemId: _id,
@@ -230,7 +231,7 @@ export function PostCard({
   const handleDelete = async () => {
     try {
       await axios.delete(
-        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/posts/${_id}`,
+        getApiUrl(`api/posts/${_id}`),
         {
           headers: {
             'Authorization': `Bearer ${token}`,

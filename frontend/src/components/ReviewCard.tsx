@@ -30,6 +30,7 @@ import {
   AlertDialogAction,
   AlertDialogCancel,
 } from "@/components/ui/alert-dialog";
+import { getApiUrl } from "@/lib/config";
 
 interface ReviewCardProps {
   _id: string;
@@ -80,7 +81,7 @@ export function ReviewCard({
       
       try {
         const response = await axios.get(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/reviews/${_id}/like-status`,
+          getApiUrl(`api/reviews/${_id}/like-status`),
           {
             headers: {
               Authorization: `Bearer ${token}`
@@ -114,7 +115,7 @@ export function ReviewCard({
     try {
       // Prevent multiple clicks while request is processing
       const response = await axios.post(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/reviews/${_id}/like`,
+        getApiUrl(`api/reviews/${_id}/like`),
         {},
         {
           headers: {
@@ -148,7 +149,7 @@ export function ReviewCard({
     }
     try {
       await axios.delete(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/reviews/${_id}`,
+        getApiUrl(`api/reviews/${_id}`),
         {
           headers: {
             Authorization: `Bearer ${token}`

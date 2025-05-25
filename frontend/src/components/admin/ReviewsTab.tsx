@@ -11,6 +11,7 @@ import { useAuth } from "@/store/AuthContext";
 import axios from "axios";
 import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { getApiUrl } from "@/lib/config";
 
 // Demo data interface
 interface Review {
@@ -60,7 +61,7 @@ export default function ReviewsTab() {
     setReviewLoading(true);
 
     try {
-      const baseUrl = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/admin/reviews`;
+      const baseUrl = getApiUrl('api/admin/reviews');
       const url = search
         ? `${baseUrl}/search?query=${encodeURIComponent(search)}&page=${page}&filter=${filter}`
         : `${baseUrl}?page=${page}&filter=${filter}`;
@@ -109,7 +110,7 @@ export default function ReviewsTab() {
 
     try {
       await axios.delete(
-        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/admin/reviews/${reviewId}`,
+        getApiUrl(`api/admin/reviews/${reviewId}`),
         {
           headers: {
             Authorization: `Bearer ${token}`,

@@ -9,6 +9,7 @@ import { useAuth } from "@/store/AuthContext";
 import axios from "axios";
 import ReportCard from "./ReportCard";
 import { Report } from "@/types/report";
+import { getApiUrl } from "@/lib/config";
 
 const statusColors = {
   pending: "bg-yellow-500/10 text-yellow-500 hover:bg-yellow-500/20",
@@ -46,7 +47,7 @@ const ReportsTab = () => {
       }
 
       const response = await axios.get(
-        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/admin/reports?${queryParams.toString()}`,
+        getApiUrl(`api/admin/reports?${queryParams.toString()}`),
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -79,7 +80,7 @@ const ReportsTab = () => {
     if (!token) return;
     try {
       const response = await axios.patch(
-        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/admin/reports/${reportId}/status`,
+        getApiUrl(`api/admin/reports/${reportId}/status`),
         { status: newStatus },
         {
           headers: {
@@ -110,7 +111,7 @@ const ReportsTab = () => {
     if (!token) return;
     try {
       const response = await axios.patch(
-        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/admin/reports/${reportId}/notes`,
+        getApiUrl(`api/admin/reports/${reportId}/notes`),
         { notes },
         {
           headers: {
@@ -144,7 +145,7 @@ const ReportsTab = () => {
     if (!token) return;
     try {
       await axios.patch(
-        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/admin/reports/${reportId}/notes`,
+        getApiUrl(`api/admin/reports/${reportId}/notes`),
         { notes: '' },
         {
           headers: {

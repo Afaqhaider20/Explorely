@@ -14,6 +14,7 @@ import axios from "axios";
 import Link from "next/link";
 import { SignInDialog } from "@/components/SignInDialog";
 import EmojiPicker, { EmojiClickData, Theme } from 'emoji-picker-react';
+import { getApiUrl } from "@/lib/config";
 
 interface CommentAuthor {
   _id: string;
@@ -182,7 +183,7 @@ export function ReviewComments({ reviewId, onCommentAdded }: ReviewCommentsProps
     
     try {
       const response = await axios.get(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/reviews/${reviewId}/comments`
+        getApiUrl(`api/reviews/${reviewId}/comments`)
       );
       setComments(response.data.data.comments);
     } catch (error) {
@@ -206,7 +207,7 @@ export function ReviewComments({ reviewId, onCommentAdded }: ReviewCommentsProps
 
     try {
       const response = await axios.post(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/reviews/${reviewId}/comments/${commentId}/like`,
+        getApiUrl(`api/reviews/${reviewId}/comments/${commentId}/like`),
         {},
         {
           headers: {
@@ -254,7 +255,7 @@ export function ReviewComments({ reviewId, onCommentAdded }: ReviewCommentsProps
     setSubmitting(true);
     try {
       await axios.post(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/reviews/${reviewId}/comments`,
+        getApiUrl(`api/reviews/${reviewId}/comments`),
         { content },
         {
           headers: {
