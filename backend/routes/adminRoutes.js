@@ -15,50 +15,227 @@ router.get('/stats', protect, isAdmin, async (req, res) => {
     const totalUsers = await User.countDocuments();
     const totalPosts = await Post.countDocuments();
     const totalCommunities = await Community.countDocuments();
+    const totalReports = await Report.countDocuments();
 
-    // Get today's date at midnight
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    // Get activity data for the last 30 days
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    thirtyDaysAgo.setHours(0, 0, 0, 0);
 
-    // Get posts from today with their interaction counts
-    const recentPosts = await Post.find({
-      createdAt: { $gte: today }
-    })
-      .populate('author', 'id name avatar')
-      .lean();
+    // Get daily counts for users, posts, communities, and reports
+    const [userActivity, postActivity, communityActivity, reportActivity] = await Promise.all([
+      User.aggregate([
+        {
+          $match: {
+            createdAt: { $gte: thirtyDaysAgo }
+          }
+        },
+        {
+          $group: {
+            _id: {
+              $dateToString: {
+                format: "%Y-%m-%d",
+                date: "$createdAt"
+              }
+            },
+            count: { $sum: 1 }
+          }
+        },
+        { $sort: { _id: 1 } }
+      ]),
+      Post.aggregate([
+        {
+          $match: {
+            createdAt: { $gte: thirtyDaysAgo }
+          }
+        },
+        {
+          $group: {
+            _id: {
+              $dateToString: {
+                format: "%Y-%m-%d",
+                date: "$createdAt"
+              }
+            },
+            count: { $sum: 1 }
+          }
+        },
+        { $sort: { _id: 1 } }
+      ]),
+      Community.aggregate([
+        {
+          $match: {
+            createdAt: { $gte: thirtyDaysAgo }
+          }
+        },
+        {
+          $group: {
+            _id: {
+              $dateToString: {
+                format: "%Y-%m-%d",
+                date: "$createdAt"
+              }
+            },
+            count: { $sum: 1 }
+          }
+        },
+        { $sort: { _id: 1 } }
+      ]),
+      Report.aggregate([
+        {
+          $match: {
+            createdAt: { $gte: thirtyDaysAgo }
+          }
+        },
+        {
+          $group: {
+            _id: {
+              $dateToString: {
+                format: "%Y-%m-%d",
+                date: "$createdAt"
+              }
+            },
+            count: { $sum: 1 }
+          }
+        },
+        { $sort: { _id: 1 } }
+      ])
+    ]);
 
-    // Get comment counts for each post
-    const postsWithInteractions = await Promise.all(recentPosts.map(async (post) => {
-      const commentCount = await Comment.countDocuments({ post: post._id });
-      const interactionScore = (post.voteCount || 0) + commentCount;
-      return {
-        ...post,
-        interactionScore
-      };
+    // Generate all dates in the last 30 days
+    const dates = [];
+    for (let i = 0; i < 30; i++) {
+      const date = new Date(thirtyDaysAgo);
+      date.setDate(date.getDate() + i);
+      dates.push(date.toISOString().split('T')[0]);
+    }
+
+    // Create a map for each activity type
+    const userMap = new Map(userActivity.map(item => [item._id, item.count]));
+    const postMap = new Map(postActivity.map(item => [item._id, item.count]));
+    const communityMap = new Map(communityActivity.map(item => [item._id, item.count]));
+    const reportMap = new Map(reportActivity.map(item => [item._id, item.count]));
+
+    // Combine all activity data
+    const recentActivity = dates.map(date => ({
+      date,
+      newUsers: userMap.get(date) || 0,
+      newPosts: postMap.get(date) || 0,
+      newCommunities: communityMap.get(date) || 0,
+      newReports: reportMap.get(date) || 0
     }));
 
-    // Sort by interaction score and take top 5
-    const topPosts = postsWithInteractions
-      .sort((a, b) => b.interactionScore - a.interactionScore)
-      .slice(0, 5);
+    // Get top communities by member count
+    const topCommunities = await Community.aggregate([
+      {
+        $project: {
+          name: 1,
+          memberCount: { $size: { $ifNull: ["$members", []] } }
+        }
+      },
+      { $sort: { memberCount: -1 } },
+      { $limit: 5 }
+    ]);
 
-    const recentActivity = topPosts.map(post => ({
-      id: post._id,
-      title: post.title,
-      createdAt: post.createdAt,
-      author: {
-        id: post.author?._id,
-        name: post.author?.name,
-        image: post.author?.avatar
+    // Get post activity for the last month
+    const lastMonth = new Date();
+    lastMonth.setMonth(lastMonth.getMonth() - 1);
+
+    // Generate all dates for the last month
+    const allDates = [];
+    const currentDate = new Date();
+    let date = new Date(lastMonth);
+    while (date <= currentDate) {
+      allDates.push(date.toISOString().split('T')[0]);
+      date.setDate(date.getDate() + 1);
+    }
+
+    // Get post counts by community for the last month
+    const communityPostActivity = await Post.aggregate([
+      {
+        $match: {
+          createdAt: { $gte: lastMonth }
+        }
+      },
+      {
+        $lookup: {
+          from: 'communities',
+          localField: 'community',
+          foreignField: '_id',
+          as: 'communityInfo'
+        }
+      },
+      {
+        $unwind: '$communityInfo'
+      },
+      {
+        $group: {
+          _id: {
+            communityId: '$community',
+            communityName: '$communityInfo.name',
+            date: { 
+              $dateToString: { 
+                format: "%Y-%m-%d", 
+                date: "$createdAt" 
+              } 
+            }
+          },
+          count: { $sum: 1 }
+        }
+      },
+      {
+        $group: {
+          _id: {
+            communityId: '$_id.communityId',
+            communityName: '$_id.communityName'
+          },
+          dates: {
+            $push: {
+              date: '$_id.date',
+              count: '$count'
+            }
+          },
+          totalPosts: { $sum: '$count' }
+        }
+      },
+      {
+        $sort: { totalPosts: -1 }
+      },
+      {
+        $limit: 5
       }
-    }));
+    ]);
+
+    // Process and fill in missing dates for each community
+    const processedCommunities = communityPostActivity.map(community => {
+      const dateMap = new Map(community.dates.map(d => [d.date, d.count]));
+      
+      // Fill in all dates, using 0 for dates with no posts
+      const filledDates = allDates.map(date => ({
+        date,
+        count: dateMap.get(date) || 0
+      }));
+
+      return {
+        communityName: community._id.communityName,
+        postCount: community.totalPosts,
+        dates: filledDates
+      };
+    });
 
     res.json({
       stats: {
         totalUsers,
         totalPosts,
-        totalCommunities
+        totalCommunities,
+        totalReports
       },
+      topCommunities: topCommunities.map(community => ({
+        id: community._id.toString(),
+        name: community.name,
+        memberCount: community.memberCount
+      })),
+      postActivity: processedCommunities,
       recentActivity
     });
   } catch (error) {

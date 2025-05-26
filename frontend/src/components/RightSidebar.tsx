@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
-import { useAuth } from '@/store/AuthContext';
+import axios from 'axios';
 
 interface Community {
   _id: string;
@@ -18,7 +18,6 @@ export function RightSidebar() {
   const [communities, setCommunities] = useState<Community[]>([]);
   const [loading, setLoading] = useState(true);
   const [mounted, setMounted] = useState(false);
-  const { token } = useAuth();
 
   useEffect(() => {
     setMounted(true);
@@ -27,18 +26,13 @@ export function RightSidebar() {
   useEffect(() => {
     const fetchTopCommunities = async () => {
       try {
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/communities/top`, {
+        const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/communities/top`, {
           headers: {
             'Content-Type': 'application/json'
           }
         });
         
-        if (!response.ok) {
-          throw new Error('Failed to fetch communities');
-        }
-
-        const data = await response.json();
-        setCommunities(data.data.communities);
+        setCommunities(response.data.data.communities);
       } catch (error) {
         console.error('Error fetching communities:', error);
       } finally {

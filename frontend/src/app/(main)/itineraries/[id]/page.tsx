@@ -68,7 +68,7 @@ export default function ItineraryDetailsPage() {
     const fetchItinerary = async () => {
       setLoading(true);
       try {
-        const res = await axios.get(`/api/useritineraries/${id}`, {
+        const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/useritineraries/${id}`, {
           headers: {
             Authorization: `Bearer ${token}`,
             'Content-Type': 'application/json'
@@ -157,7 +157,7 @@ export default function ItineraryDetailsPage() {
     }
     setAddingActivity(true);
     try {
-      const res = await axios.post(`/api/useritineraries/${id}/activities`, activityForm, {
+      const res = await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/api/useritineraries/${id}/activities`, activityForm, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setItinerary(it => it ? { ...it, activities: res.data.data.activities } : it);
@@ -179,7 +179,7 @@ export default function ItineraryDetailsPage() {
       return;
     }
     try {
-      await axios.delete(`/api/useritineraries/${id}/activities/${idx}`, {
+      await axios.delete(`${process.env.NEXT_PUBLIC_API_URL}/api/useritineraries/${id}/activities/${idx}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setItinerary(it => it ? { ...it, activities: (it.activities || []).filter((_, i) => i !== idx) } : it);
@@ -210,7 +210,7 @@ export default function ItineraryDetailsPage() {
     }
     setAddingAcc(true);
     try {
-      const res = await axios.post(`/api/useritineraries/${id}/accommodations`, accForm, {
+      const res = await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/api/useritineraries/${id}/accommodations`, accForm, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setItinerary(it => it ? { ...it, accommodations: res.data.data.accommodations } : it);
@@ -231,7 +231,7 @@ export default function ItineraryDetailsPage() {
       return;
     }
     try {
-      await axios.delete(`/api/useritineraries/${id}/accommodations/${idx}`, {
+      await axios.delete(`${process.env.NEXT_PUBLIC_API_URL}/api/useritineraries/${id}/accommodations/${idx}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setItinerary(it => it ? { ...it, accommodations: (it.accommodations || []).filter((_, i) => i !== idx) } : it);
@@ -262,7 +262,7 @@ export default function ItineraryDetailsPage() {
     }
     setAddingRest(true);
     try {
-      const res = await axios.post(`/api/useritineraries/${id}/restaurants`, restForm, {
+      const res = await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/api/useritineraries/${id}/restaurants`, restForm, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setItinerary(it => it ? { ...it, restaurants: res.data.data.restaurants } : it);
@@ -283,7 +283,7 @@ export default function ItineraryDetailsPage() {
       return;
     }
     try {
-      await axios.delete(`/api/useritineraries/${id}/restaurants/${idx}`, {
+      await axios.delete(`${process.env.NEXT_PUBLIC_API_URL}/api/useritineraries/${id}/restaurants/${idx}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setItinerary(it => it ? { ...it, restaurants: (it.restaurants || []).filter((_, i) => i !== idx) } : it);

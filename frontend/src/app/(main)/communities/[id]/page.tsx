@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, use } from 'react';
+import { useEffect, useState, useCallback, use, useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -114,6 +114,15 @@ interface Community {
 function CommunityPageClient({ id }: { id: string }) {
   const [community, setCommunity] = useState<Community | null>(null);
   const [loading, setLoading] = useState(true);
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [postsLoading, setPostsLoading] = useState(false);
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 10,
+    hasMore: true,
+    total: 0
+  });
+  const loadMoreRef = useRef<HTMLDivElement>(null);
   const { token, user, isAuthenticated, isInitialized, addJoinedCommunity, removeJoinedCommunity } = useAuth();
   const [isOwner, setIsOwner] = useState(false);
   const [isMember, setIsMember] = useState(false);
@@ -151,7 +160,6 @@ function CommunityPageClient({ id }: { id: string }) {
   };
 
   const fetchCommunity = useCallback(async () => {
-    // Don't make the request if we don't have a token yet
     if (!token) {
       setLoading(false);
       return;
@@ -225,6 +233,45 @@ function CommunityPageClient({ id }: { id: string }) {
     }
   }, [id, token, user]);
 
+  const fetchPosts = useCallback(async (page = 1, append = false) => {
+    if (!token) return;
+
+    setPostsLoading(true);
+    try {
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/communities/${id}/posts?page=${page}&limit=${pagination.limit}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch posts');
+      }
+
+      const data = await response.json();
+      const newPosts = data.data.posts;
+      
+      setPosts(prevPosts => append ? [...prevPosts, ...newPosts] : newPosts);
+      setPagination(data.data.pagination);
+    } catch (error) {
+      console.error('Error fetching posts:', error);
+      toast.error('Failed to load posts');
+    } finally {
+      setPostsLoading(false);
+    }
+  }, [id, token, pagination.limit]);
+
+  // Load initial posts when community is loaded
+  useEffect(() => {
+    if (community) {
+      fetchPosts(1, false);
+    }
+  }, [community, fetchPosts]);
+
   // Update isOwner state whenever user or community changes
   useEffect(() => {
     if (user && community) {
@@ -256,6 +303,30 @@ function CommunityPageClient({ id }: { id: string }) {
       fetchCommunity();
     }
   }, [fetchCommunity, token]);
+
+  // Add intersection observer for infinite scroll
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const first = entries[0];
+        if (first.isIntersecting && pagination.hasMore && !postsLoading) {
+          fetchPosts(pagination.page + 1, true);
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    const currentRef = loadMoreRef.current;
+    if (currentRef) {
+      observer.observe(currentRef);
+    }
+
+    return () => {
+      if (currentRef) {
+        observer.unobserve(currentRef);
+      }
+    };
+  }, [pagination.hasMore, postsLoading, fetchPosts, pagination.page]);
 
   // Add new function to handle blocking members
   const handleBlockMember = async (memberId: string) => {
@@ -756,25 +827,36 @@ function CommunityPageClient({ id }: { id: string }) {
                     </div>
                   </Button>
                 }
-                onPostCreated={fetchCommunity}
+                onPostCreated={() => {
+                  fetchPosts(1, false); // Refresh posts from first page
+                }}
               />
 
-              {(community?.posts?.length || 0) > 0 ? (
+              {posts.length > 0 ? (
                 <div className="space-y-6">
-                  {community.posts.map((post) => (
+                  {posts.map((post) => (
                     <PostCard 
                       key={post._id}
                       {...post}
-                      media={post.media || null}  // Ensure media is never undefined
+                      media={post.media || null}
                       community={{
                         ...community,
                         creator: community.creator
                       }}
                       commentCount={post.commentCount || 0}
                       updatedAt={post.updatedAt || post.createdAt}
-                      onDelete={fetchCommunity}
+                      onDelete={() => fetchPosts(1, false)}
                     />
                   ))}
+                  
+                  {/* Loading indicator and intersection observer target */}
+                  <div ref={loadMoreRef} className="py-4">
+                    {postsLoading && (
+                      <div className="flex justify-center">
+                        <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                      </div>
+                    )}
+                  </div>
                 </div>
               ) : (
                 <div className="text-center py-12 text-muted-foreground">

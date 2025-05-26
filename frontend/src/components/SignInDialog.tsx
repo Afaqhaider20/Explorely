@@ -17,6 +17,7 @@ import { ArrowRight, Eye, EyeOff } from "lucide-react"
 import Image from "next/image"
 import axios from 'axios';
 import type { User } from '@/types/api';
+import type { User as AuthUser } from '@/store/AuthContext';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
@@ -64,8 +65,19 @@ export function SignInDialog({ trigger, onSwitchToSignUp, open, onOpenChange, on
       );
 
       if (response.data.status === 'success' && response.data.data) {
-        const { user, token } = response.data.data;
-        setAuth(user, token);
+        const { user: apiUser, token } = response.data.data;
+        // Transform the user data to match the expected type
+        const transformedUser: AuthUser = {
+          ...apiUser,
+          joinedCommunities: apiUser.joinedCommunities.map(community => ({
+            _id: community._id,
+            name: community.name,
+            avatar: community.avatar,
+            description: '',
+            rules: []
+          }))
+        };
+        setAuth(transformedUser, token);
         
         if (onOpenChange) {
           onOpenChange(false);

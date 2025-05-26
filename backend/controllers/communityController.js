@@ -88,15 +88,6 @@ const getCommunity = async (req, res) => {
             .populate('moderators', 'username avatar')
             .populate('members', 'username avatar')
             .populate('blockedMembers', 'username avatar')
-            .populate({
-                path: 'posts',
-                select: 'title content media voteCount createdAt updatedAt',
-                populate: [
-                    { path: 'author', select: 'username avatar' },
-                    { path: 'community', select: 'name' }
-                ],
-                options: { sort: { createdAt: -1 } }
-            })
             .lean();
 
         if (!community) {
@@ -113,26 +104,9 @@ const getCommunity = async (req, res) => {
             });
         }
 
-        // Format posts with comment counts
-        const postsWithCommentCounts = await Promise.all((community.posts || []).map(async post => {
-            if (!post) return null;
-            const commentCount = await Comment.countDocuments({ post: post._id });
-            return {
-                ...post,
-                commentCount,
-                voteCount: post.voteCount || 0,
-                votes: undefined,
-                comments: undefined
-            };
-        }));
-
-        // Filter out any null posts
-        const validPosts = postsWithCommentCounts.filter(post => post !== null);
-
         // Format the response
         const formattedCommunity = {
             ...community,
-            posts: validPosts,
             memberCount: (community.members || []).length,
             blockedMembers: community.blockedMembers || []
         };
@@ -153,7 +127,7 @@ const getCommunity = async (req, res) => {
     }
 };
 
-// Get community posts
+// Get community posts with pagination
 const getCommunityPosts = async (req, res) => {
     try {
         const page = parseInt(req.query.page) || 1;
@@ -161,7 +135,7 @@ const getCommunityPosts = async (req, res) => {
         const skip = (page - 1) * limit;
 
         const posts = await Post.find({ community: req.params.id })
-            .select('title content media voteCount comments createdAt updatedAt') // Changed from votes to voteCount
+            .select('title content media voteCount createdAt updatedAt')
             .populate('author', 'username avatar')
             .populate('community', 'name')
             .sort({ createdAt: -1 })
@@ -169,17 +143,36 @@ const getCommunityPosts = async (req, res) => {
             .limit(limit)
             .lean();
 
+        // Get comment counts for each post
+        const postsWithCommentCounts = await Promise.all(posts.map(async post => {
+            const commentCount = await Comment.countDocuments({ post: post._id });
+            return {
+                ...post,
+                commentCount,
+                voteCount: post.voteCount || 0
+            };
+        }));
+
         const totalPosts = await Post.countDocuments({ community: req.params.id });
 
-        res.json({
-            posts,
-            page,
-            limit,
-            hasMore: totalPosts > skip + posts.length,
-            total: totalPosts
+        res.status(200).json({
+            status: 'success',
+            data: {
+                posts: postsWithCommentCounts,
+                pagination: {
+                    page,
+                    limit,
+                    hasMore: totalPosts > skip + posts.length,
+                    total: totalPosts
+                }
+            }
         });
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        console.error('Error in getCommunityPosts:', error);
+        res.status(500).json({ 
+            message: 'Failed to load community posts',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 };
 

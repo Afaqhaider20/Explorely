@@ -83,7 +83,7 @@ export function CreateItineraryDialog({ open, onOpenChange, onCreated }: CreateI
     setLoading(true);
     try {
       await axios.post(
-        '/api/useritineraries',
+        `${process.env.NEXT_PUBLIC_API_URL}/api/useritineraries`,
         { 
           ...form, 
           travelers: Number(form.travelers),

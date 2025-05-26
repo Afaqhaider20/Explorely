@@ -126,20 +126,12 @@ module.exports = (server) => {
         io.to(communityId).emit('new_message', populatedMessage);
         console.log(`📢 Message broadcasted to room ${communityId}`);
 
-        // Update unread messages for offline users and those not in the chat
-        const onlineUsersInRoom = Array.from(io.sockets.adapter.rooms.get(communityId) || []);
-        console.log(`👥 ${onlineUsersInRoom.length} users currently in chat room`);
-        
         // Process all community members for unread updates
         for (const member of communityMembers) {
+          // Skip the sender
+          if (member._id.toString() === socket.user._id.toString()) continue;
+
           const userSocketId = onlineUsers.get(member._id.toString());
-          const isInChatRoom = userSocketId && onlineUsersInRoom.includes(userSocketId);
-          
-          // Skip if user is in the chat room
-          if (isInChatRoom) {
-            console.log(`⏭️ Skipping unread count for ${member.username} (in chat room)`);
-            continue;
-          }
 
           // Get current unread count before update
           const userBeforeUpdate = await User.findById(member._id);
@@ -154,7 +146,6 @@ module.exports = (server) => {
           );
 
           if (updateResult.matchedCount === 0) {
-            console.log(`📝 Creating new unread message entry for ${member.username}`);
             // No matching unreadMessages entry, so push a new one
             await User.updateOne(
               { _id: member._id },
@@ -168,8 +159,6 @@ module.exports = (server) => {
                 }
               }
             );
-          } else {
-            console.log(`📊 Updated unread count for ${member.username}: ${currentUnreadCount} → ${currentUnreadCount + 1}`);
           }
 
           // If user is online, send them the last message update
@@ -187,7 +176,6 @@ module.exports = (server) => {
                 }
               }
             });
-            console.log(`📨 Sent last message update to ${member.username} in community ${community.name} (${populatedMessage.isImage ? 'Image' : populatedMessage.content})`);
           }
         }
 

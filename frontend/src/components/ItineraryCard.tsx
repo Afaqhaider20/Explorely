@@ -196,7 +196,7 @@ export function ItineraryCard({
                       e.stopPropagation();
                       setDialogOpen(false);
                       try {
-                        await axios.delete(`/api/useritineraries/${id}`, {
+                        await axios.delete(`${process.env.NEXT_PUBLIC_API_URL}/api/useritineraries/${id}`, {
                           headers: {
                             Authorization: `Bearer ${token}`,
                             'Content-Type': 'application/json'

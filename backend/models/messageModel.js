@@ -3,8 +3,12 @@ const mongoose = require('mongoose');
 const messageSchema = new mongoose.Schema({
   content: {
     type: String,
-    required: true,
-    trim: true
+    trim: true,
+    default: '',
+  },
+  image: {
+    type: String, // This will store the Cloudinary image URL
+    default: '',
   },
   isImage: {
     type: Boolean,
