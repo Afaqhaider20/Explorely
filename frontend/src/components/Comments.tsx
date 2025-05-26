@@ -49,19 +49,19 @@ interface CommentsProps {
 interface CommentTextareaProps {
   onSubmit: (content: string) => Promise<void>;
   onCancel: () => void;
-  submitting: boolean;
   placeholder?: string;
   defaultValue?: string;
   className?: string;
+  isReply?: boolean;
 }
 
 const CommentTextarea = ({ 
   onSubmit, 
   onCancel, 
-  submitting, 
   placeholder = "What are your thoughts?",
   defaultValue = "",
-  className
+  className,
+  isReply = false
 }: CommentTextareaProps) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -166,9 +166,8 @@ const CommentTextarea = ({
           size="sm"
           className="h-7 text-xs px-2 sm:h-8 sm:px-3"
           onClick={handleSubmit}
-          disabled={submitting}
         >
-          {submitting ? "Submitting..." : "Post Comment"}
+          {isReply ? "Reply" : "Post Comment"}
         </Button>
       </div>
     </div>
@@ -180,7 +179,6 @@ export function Comments({ postId, type = 'post', onCommentAdded }: CommentsProp
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTextarea, setActiveTextarea] = useState<{ type: 'new' | 'reply', id?: string } | null>(null);
-  const [submitting, setSubmitting] = useState(false);
   const [likedComments, setLikedComments] = useState<Set<string>>(new Set());
   const [signInOpen, setSignInOpen] = useState(false);
   const { token, user } = useAuth();
@@ -338,8 +336,6 @@ export function Comments({ postId, type = 'post', onCommentAdded }: CommentsProp
   };
 
   const handleSubmitComment = async (content: string, parentCommentId: string | null) => {
-    setSubmitting(true);
-    
     // Create a temporary comment object
     const tempComment: CommentData = {
       _id: `temp-${Date.now()}`,
@@ -357,26 +353,39 @@ export function Comments({ postId, type = 'post', onCommentAdded }: CommentsProp
       isEdited: false,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
+      replies: []
+    };
+
+    // Helper function to recursively find and update comments
+    const updateCommentsRecursively = (comments: CommentData[], targetId: string, updateFn: (comment: CommentData) => CommentData): CommentData[] => {
+      return comments.map(comment => {
+        if (comment._id === targetId) {
+          return updateFn(comment);
+        }
+        if (comment.replies && comment.replies.length > 0) {
+          return {
+            ...comment,
+            replies: updateCommentsRecursively(comment.replies, targetId, updateFn)
+          };
+        }
+        return comment;
+      });
     };
 
     // Optimistically add the comment to the UI
     setComments(prevComments => {
       if (parentCommentId) {
-        // Add as a reply
-        return prevComments.map(comment => {
-          if (comment._id === parentCommentId) {
-            return {
-              ...comment,
-              replies: [...(comment.replies || []), tempComment],
-            };
-          }
-          return comment;
-        });
+        return updateCommentsRecursively(prevComments, parentCommentId, comment => ({
+          ...comment,
+          replies: [...(comment.replies || []), tempComment]
+        }));
       } else {
-        // Add as a top-level comment
         return [tempComment, ...prevComments];
       }
     });
+
+    // Close the textarea immediately
+    setActiveTextarea(null);
 
     try {
       const response = await axios.post(
@@ -393,17 +402,12 @@ export function Comments({ postId, type = 'post', onCommentAdded }: CommentsProp
       // Replace the temporary comment with the real one
       setComments(prevComments => {
         if (parentCommentId) {
-          return prevComments.map(comment => {
-            if (comment._id === parentCommentId) {
-              return {
-                ...comment,
-                replies: comment.replies?.map(reply => 
-                  reply._id === tempComment._id ? response.data.data.comment : reply
-                ) || [],
-              };
-            }
-            return comment;
-          });
+          return updateCommentsRecursively(prevComments, parentCommentId, comment => ({
+            ...comment,
+            replies: comment.replies?.map(reply => 
+              reply._id === tempComment._id ? response.data.data.comment : reply
+            ) || []
+          }));
         } else {
           return prevComments.map(comment => 
             comment._id === tempComment._id ? response.data.data.comment : comment
@@ -411,30 +415,22 @@ export function Comments({ postId, type = 'post', onCommentAdded }: CommentsProp
         }
       });
 
-      setActiveTextarea(null);
       toast.success(parentCommentId ? "Reply posted successfully" : "Comment posted successfully");
       onCommentAdded?.();
     } catch (error) {
       // Remove the temporary comment on error
       setComments(prevComments => {
         if (parentCommentId) {
-          return prevComments.map(comment => {
-            if (comment._id === parentCommentId) {
-              return {
-                ...comment,
-                replies: comment.replies?.filter(reply => reply._id !== tempComment._id) || [],
-              };
-            }
-            return comment;
-          });
+          return updateCommentsRecursively(prevComments, parentCommentId, comment => ({
+            ...comment,
+            replies: comment.replies?.filter(reply => reply._id !== tempComment._id) || []
+          }));
         } else {
           return prevComments.filter(comment => comment._id !== tempComment._id);
         }
       });
 
       toast.error(error instanceof Error ? error.message : "Failed to post comment");
-    } finally {
-      setSubmitting(false);
     }
   };
 
@@ -542,8 +538,8 @@ export function Comments({ postId, type = 'post', onCommentAdded }: CommentsProp
               <CommentTextarea
                 onSubmit={(content) => handleSubmitComment(content, comment._id)}
                 onCancel={() => setActiveTextarea(null)}
-                submitting={submitting}
                 placeholder="Write a thoughtful reply..."
+                isReply={true}
               />
             </div>
           )}
@@ -628,7 +624,6 @@ export function Comments({ postId, type = 'post', onCommentAdded }: CommentsProp
               <CommentTextarea
                 onSubmit={(content) => handleSubmitComment(content, null)}
                 onCancel={() => setActiveTextarea(null)}
-                submitting={submitting}
               />
             </div>
           )}
