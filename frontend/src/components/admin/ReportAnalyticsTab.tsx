@@ -54,7 +54,7 @@ const ReportAnalyticsTab = () => {
         );
 
         setMonthTotals(response.data.monthTotals);
-      } catch (err) {
+      } catch {
         setError('Failed to fetch report analytics');
       } finally {
         setLoading(false);

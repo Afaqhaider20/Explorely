@@ -111,6 +111,21 @@ interface Community {
   memberCount: number;
 }
 
+function PostSkeleton() {
+  return (
+    <div className="border rounded-xl p-6 backdrop-blur-sm bg-background">
+      <div className="flex gap-4">
+        <div className="h-10 w-10 rounded-full bg-muted animate-pulse" />
+        <div className="flex-1 space-y-3">
+          <div className="h-4 w-1/4 bg-muted rounded animate-pulse" />
+          <div className="h-4 w-1/2 bg-muted rounded animate-pulse" />
+          <div className="h-4 w-3/4 bg-muted rounded animate-pulse" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CommunityPageClient({ id }: { id: string }) {
   const [community, setCommunity] = useState<Community | null>(null);
   const [loading, setLoading] = useState(true);
@@ -832,7 +847,13 @@ function CommunityPageClient({ id }: { id: string }) {
                 }}
               />
 
-              {posts.length > 0 ? (
+              {postsLoading && posts.length === 0 ? (
+                <div className="space-y-6">
+                  <PostSkeleton />
+                  <PostSkeleton />
+                  <PostSkeleton />
+                </div>
+              ) : posts.length > 0 ? (
                 <div className="space-y-6">
                   {posts.map((post) => (
                     <PostCard 

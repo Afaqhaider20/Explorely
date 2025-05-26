@@ -10,6 +10,13 @@ export interface JoinedCommunity {
   _id: string;
   name: string;
   avatar: string;
+  description: string;
+  rules: {
+    order: number;
+    content: string;
+    _id: string;
+    createdAt: string;
+  }[];
 }
 
 export interface ApiResponse<T = unknown> {

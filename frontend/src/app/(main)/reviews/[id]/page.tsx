@@ -8,7 +8,6 @@ import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import axios from 'axios';
 import { toast } from 'sonner';
-import { useAuth } from '@/store/AuthContext';
 import { ReviewComments } from '@/components/ReviewComments';
 
 interface Review {
@@ -33,44 +32,43 @@ export default function ReviewDetailPage() {
   const { id } = useParams();
   const [review, setReview] = useState<Review | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const { isAuthenticated } = useAuth();
 
-  const fetchReview = async () => {
-    try {
-      const response = await axios.get(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/reviews/${id}`
-      );
-      setReview(response.data.data.review);
-    } catch (error) {
-      if (axios.isAxiosError(error)) {
-        if (error.response?.status === 404) {
-          // Handle not found case
-          setReview(null);
-        } else if (error.response?.status === 400) {
-          // Handle invalid ID case
-          console.error('Invalid review ID:', error);
-          setReview(null);
-        } else if (error.response?.status === 500) {
-          // Handle server error
-          console.error('Server error:', error);
-          toast.error('Server error occurred. Please try again later.');
+  useEffect(() => {
+    const fetchReview = async () => {
+      try {
+        const response = await axios.get(
+          `${process.env.NEXT_PUBLIC_API_URL}/api/reviews/${id}`
+        );
+        setReview(response.data.data.review);
+      } catch (error) {
+        if (axios.isAxiosError(error)) {
+          if (error.response?.status === 404) {
+            // Handle not found case
+            setReview(null);
+          } else if (error.response?.status === 400) {
+            // Handle invalid ID case
+            console.error('Invalid review ID:', error);
+            setReview(null);
+          } else if (error.response?.status === 500) {
+            // Handle server error
+            console.error('Server error:', error);
+            toast.error('Server error occurred. Please try again later.');
+          } else {
+            // Handle other errors
+            console.error('Error fetching review:', error);
+            toast.error('Failed to load review');
+          }
         } else {
-          // Handle other errors
+          // Handle non-Axios errors
           console.error('Error fetching review:', error);
           toast.error('Failed to load review');
         }
-      } else {
-        // Handle non-Axios errors
-        console.error('Error fetching review:', error);
-        toast.error('Failed to load review');
+        setReview(null);
+      } finally {
+        setIsLoading(false);
       }
-      setReview(null);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    };
 
-  useEffect(() => {
     fetchReview();
   }, [id]);
 

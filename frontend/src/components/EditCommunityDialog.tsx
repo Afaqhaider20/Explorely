@@ -1,8 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { cn } from "@/lib/utils"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Label } from "@/components/ui/label"
@@ -10,25 +9,12 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { ImagePlus, Plus, X, Loader2 } from "lucide-react"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip"
 import { toast } from "sonner"
 import { useAuth } from '@/store/AuthContext';
 
 interface Rule {
   id: string;
   content: string;
-}
-
-interface EditCommunityData {
-  name: string;
-  description: string;
-  rules: Rule[];
-  avatar?: File;
 }
 
 interface EditCommunityDialogProps {
@@ -64,7 +50,7 @@ export function EditCommunityDialog({ community, open, onOpenChange, onUpdated }
   const [avatar, setAvatar] = useState<File>()
   const [previewUrl, setPreviewUrl] = useState<string>(community.avatar)
   const [rules, setRules] = useState<Rule[]>(
-    community.rules.map((rule, index) => ({
+    community.rules.map((rule) => ({
       id: rule._id,
       content: rule.content
     }))
@@ -79,7 +65,7 @@ export function EditCommunityDialog({ community, open, onOpenChange, onUpdated }
       setName(community.name);
       setDescription(community.description);
       setPreviewUrl(community.avatar);
-      setRules(community.rules.map((rule, index) => ({
+      setRules(community.rules.map((rule) => ({
         id: rule._id,
         content: rule.content
       })));
@@ -198,8 +184,8 @@ export function EditCommunityDialog({ community, open, onOpenChange, onUpdated }
       }
 
       toast.success('Community updated successfully!');
-      onOpenChange(false);
       onUpdated();
+      onOpenChange(false);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to update community');
     } finally {
@@ -209,181 +195,135 @@ export function EditCommunityDialog({ community, open, onOpenChange, onUpdated }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px] h-[85vh] flex flex-col">
-        <DialogHeader className="pb-4">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
           <DialogTitle>Edit Community</DialogTitle>
           <DialogDescription>
-            Update your community's information and rules
+            Make changes to your community&apos;s information
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="flex-1 overflow-hidden flex flex-col">
-          <ScrollArea className="flex-1 pr-4 -mr-4">
-            <div className="space-y-4">
-              <div className="relative group">
-                <Avatar className="h-16 w-16 transition-transform duration-200 group-hover:scale-105">
-                  <AvatarImage src={previewUrl} />
-                  <AvatarFallback className="bg-muted">
-                    {name ? name[0].toUpperCase() : 'C'}
-                  </AvatarFallback>
-                </Avatar>
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Label
-                        htmlFor="community-avatar"
-                        className="absolute bottom-0 right-0 p-1.5 rounded-full bg-primary text-white cursor-pointer
-                          hover:bg-primary/90 transition-all duration-200 hover:scale-110"
-                      >
-                        <ImagePlus className="h-3.5 w-3.5" />
-                      </Label>
-                    </TooltipTrigger>
-                    <TooltipContent>Change community avatar</TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Avatar Section */}
+          <div className="space-y-4">
+            <Label>Community Avatar</Label>
+            <div className="flex items-center gap-4">
+              <Avatar className="h-20 w-20">
+                <AvatarImage src={previewUrl} alt={name} />
+                <AvatarFallback>{name.slice(0, 2).toUpperCase()}</AvatarFallback>
+              </Avatar>
+              <div className="flex-1">
                 <Input
-                  id="community-avatar"
                   type="file"
                   accept={ALLOWED_IMAGE_TYPES.join(',')}
-                  className="hidden"
                   onChange={handleAvatarChange}
+                  className="hidden"
+                  id="avatar-upload"
                 />
-              </div>
-
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="name">Community Name</Label>
-                  <span className="text-xs text-muted-foreground">
-                    {name.length}/{MAX_NAME_LENGTH}
-                  </span>
-                </div>
-                <Input
-                  id="name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value.slice(0, MAX_NAME_LENGTH))}
-                  placeholder="e.g., StreetFoodPK"
-                  className={cn(
-                    "focus-visible:ring-1 focus-visible:ring-offset-0",
-                    errors.name && "border-destructive focus-visible:ring-destructive"
-                  )}
-                  required
-                />
-                {errors.name && (
-                  <p className="text-xs text-destructive">{errors.name}</p>
-                )}
-              </div>
-
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="description">Description</Label>
-                  <span className="text-xs text-muted-foreground">
-                    {description.length}/{MAX_DESCRIPTION_LENGTH}
-                  </span>
-                </div>
-                <Textarea
-                  id="description"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value.slice(0, MAX_DESCRIPTION_LENGTH))}
-                  placeholder="What's this community about?"
-                  className={cn(
-                    "resize-none focus-visible:ring-1 focus-visible:ring-offset-0",
-                    errors.description && "border-destructive focus-visible:ring-destructive"
-                  )}
-                  rows={3}
-                  required
-                />
-                {errors.description && (
-                  <p className="text-xs text-destructive">{errors.description}</p>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label className="text-sm">Community Rules</Label>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Add guidelines ({rules.length}/{MAX_RULES})
-                    </p>
-                  </div>
-                </div>
-
-                <div 
-                  className="rounded-lg border bg-gradient-to-b from-muted/50 to-muted/30"
-                  ref={setRulesContainerRef}
-                  style={{ maxHeight: '300px', overflowY: 'auto' }}
+                <Label
+                  htmlFor="avatar-upload"
+                  className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 bg-muted hover:bg-muted/80 rounded-md transition-colors"
                 >
-                  {rules.length > 0 ? (
-                    <div className="divide-y divide-border/50">
-                      {rules.map((rule, index) => (
-                        <div key={rule.id} className="p-4">
-                          <div className="flex items-start gap-4">
-                            <span className="flex-none w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center font-medium">
-                              {index + 1}
-                            </span>
-                            <div className="flex-1 min-w-0">
-                              <Textarea
-                                value={rule.content}
-                                onChange={(e) => updateRule(rule.id, e.target.value.slice(0, MAX_RULE_LENGTH))}
-                                placeholder={`Rule ${index + 1}`}
-                                className="resize-none focus-visible:ring-1 focus-visible:ring-offset-0"
-                                rows={2}
-                              />
-                            </div>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => removeRule(rule.id)}
-                              className="flex-none"
-                            >
-                              <X className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="px-4 py-8 flex flex-col items-center justify-center">
-                      <p className="text-sm text-muted-foreground mb-4">
-                        No rules added yet
-                      </p>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={addRule}
-                        disabled={rules.length >= MAX_RULES}
-                        className="flex items-center gap-2 hover:bg-primary hover:text-primary-foreground"
-                      >
-                        <Plus className="h-4 w-4" />
-                        Add Your First Rule
-                      </Button>
-                    </div>
-                  )}
-                </div>
-                
-                {rules.length > 0 && rules.length < MAX_RULES && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={addRule}
-                    className="w-full flex items-center gap-2 justify-center hover:bg-primary hover:text-primary-foreground"
-                  >
-                    <Plus className="h-4 w-4" />
-                    Add Another Rule
-                  </Button>
-                )}
-
-                {errors.rules && (
-                  <p className="text-xs text-destructive mt-2">{errors.rules}</p>
+                  <ImagePlus className="h-4 w-4" />
+                  Change Avatar
+                </Label>
+                {errors.avatar && (
+                  <p className="text-sm text-destructive mt-1">{errors.avatar}</p>
                 )}
               </div>
             </div>
-          </ScrollArea>
+          </div>
 
-          <div className="flex justify-end gap-2 pt-4">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+          {/* Name Section */}
+          <div className="space-y-2">
+            <Label htmlFor="name">Name</Label>
+            <Input
+              id="name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              maxLength={MAX_NAME_LENGTH}
+              placeholder="Enter community name"
+            />
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>{name.length}/{MAX_NAME_LENGTH} characters</span>
+              {errors.name && <span className="text-destructive">{errors.name}</span>}
+            </div>
+          </div>
+
+          {/* Description Section */}
+          <div className="space-y-2">
+            <Label htmlFor="description">Description</Label>
+            <Textarea
+              id="description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              maxLength={MAX_DESCRIPTION_LENGTH}
+              placeholder="Describe your community"
+              className="min-h-[100px]"
+            />
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>{description.length}/{MAX_DESCRIPTION_LENGTH} characters</span>
+              {errors.description && <span className="text-destructive">{errors.description}</span>}
+            </div>
+          </div>
+
+          {/* Rules Section */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <Label>Community Rules</Label>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={addRule}
+                disabled={rules.length >= MAX_RULES}
+                className="gap-2"
+              >
+                <Plus className="h-4 w-4" />
+                Add Rule
+              </Button>
+            </div>
+
+            <ScrollArea
+              className="h-[200px] rounded-md border p-4"
+              ref={setRulesContainerRef}
+            >
+              <div className="space-y-4">
+                {rules.map((rule) => (
+                  <div key={rule.id} className="flex items-start gap-2">
+                    <Input
+                      value={rule.content}
+                      onChange={(e) => updateRule(rule.id, e.target.value)}
+                      maxLength={MAX_RULE_LENGTH}
+                      placeholder="Enter a rule"
+                      className="flex-1"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => removeRule(rule.id)}
+                      className="shrink-0"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
+            {errors.rules && (
+              <p className="text-sm text-destructive">{errors.rules}</p>
+            )}
+          </div>
+
+          {/* Submit Button */}
+          <div className="flex justify-end gap-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              disabled={loading}
+            >
               Cancel
             </Button>
             <Button type="submit" disabled={loading}>

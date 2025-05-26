@@ -6,6 +6,8 @@ const connectDB = require("./config/db");
 const mongoose = require('mongoose');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
+const geoip = require('geoip-lite');
+
 
 // Import routes
 const userRoutes = require('./routes/userRoutes');
@@ -21,6 +23,7 @@ const communityItineraryDetailsRoutes = require('./routes/communityItineraryDeta
 const notificationRoutes = require('./routes/notificationRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const reportRoutes = require('./routes/reportRoutes');
+const searchRoutes = require('./routes/searchRoutes');
 
 // Import all models first
 require('./models/userModel');
@@ -60,7 +63,7 @@ app.use("/api/users", userRoutes);
 app.use("/api/communities", communityRoutes);
 app.use("/api/posts", postRoutes);
 app.use("/api", commentRoutes);
-app.use("/api/search", require('./routes/searchRoutes'));
+app.use("/api/search", searchRoutes);
 app.use("/api/messages", messageRoutes);
 app.use('/api/explore', exploreRoutes);
 app.use('/api/reviews', reviewRoutes);
@@ -70,6 +73,18 @@ app.use('/api/community-itineraries', communityItineraryDetailsRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/reports', reportRoutes);
+
+app.use((req, res, next) => {
+    const ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+    const geo = geoip.lookup(ip);
+  
+    console.log("User IP:", ip);
+    console.log("User location:", geo);
+  
+    req.userLocation = geo;
+  
+    next();
+  });
 
 // Create HTTP server (needed for socket.io)
 const server = require('http').createServer(app);
@@ -89,3 +104,7 @@ server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Frontend URL: ${process.env.FRONTEND_URL}`);
 });
+
+
+
+

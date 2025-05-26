@@ -2,14 +2,12 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import React from "react";
-import Image from "next/image";
 import { ExternalLink } from "lucide-react";
 
 interface MessageProps {
   message: {
     _id: string;
     content: string;
-    isImage: boolean;
     timestamp: string;
     user: {
       _id: string;
@@ -23,28 +21,7 @@ interface MessageProps {
 export function Message({ message, currentUserId }: MessageProps) {
   const isCurrentUser = message.user?._id === currentUserId;
 
-  const renderMessageContent = (content: string, isImage: boolean) => {
-    if (isImage) {
-      return (
-        <div className="relative w-64 h-64 rounded-lg overflow-hidden group">
-          <Image
-            src={content}
-            alt="Message image"
-            fill
-            className="object-cover transition-transform duration-300 group-hover:scale-105"
-          />
-          <a
-            href={content}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center"
-          >
-            <ExternalLink className="w-6 h-6 text-white" />
-          </a>
-        </div>
-      );
-    }
-
+  const renderMessageContent = (content: string) => {
     // Parse URLs and render as links
     const urlRegex = /(https?:\/\/[\w\-._~:/?#[\]@!$&'()*+,;=%]+)|(www\.[\w\-._~:/?#[\]@!$&'()*+,;=%]+)/gi;
     const parts = content.split(urlRegex);
@@ -125,7 +102,7 @@ export function Message({ message, currentUserId }: MessageProps) {
               : "bg-muted hover:bg-muted/80"
           )}
         >
-          {renderMessageContent(message.content, message.isImage)}
+          {renderMessageContent(message.content)}
         </div>
       </div>
     </div>

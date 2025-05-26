@@ -21,7 +21,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ReportDialog } from '@/components/ReportDialog';
 import { toast } from "sonner";
-import axios from "axios";
 import { ErrorState } from "@/components/ErrorState";
 
 export default function ProfileIdPage({ params }: { params: Promise<{ id: string }> }) {
@@ -31,7 +30,8 @@ export default function ProfileIdPage({ params }: { params: Promise<{ id: string
   const [error, setError] = useState<string | null>(null);
   const [errorType, setErrorType] = useState<'not-found' | 'unauthorized' | 'server-error'>('server-error');
   const [isReportDialogOpen, setIsReportDialogOpen] = useState(false);
-  const { token } = useAuth();
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const { token, isInitialized } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
@@ -75,26 +75,35 @@ export default function ProfileIdPage({ params }: { params: Promise<{ id: string
     fetchProfile();
   }, [token, router, resolvedParams.id]);
 
-  const handleShare = () => {
-    navigator.clipboard.writeText(`${window.location.origin}/profile/${resolvedParams.id}`);
-    toast.success('Profile link copied to clipboard!');
-  };
+  // Show loading state while auth is initializing
+  if (!isInitialized) {
+    return <ProfileSkeleton />;
+  }
 
-  const handleReport = async (reason: string) => {
-    if (!token || !profileData) {
-      toast.error('Authentication required');
-      return;
-    }
-    setIsReportDialogOpen(false);
-  };
+  // Only show unauthorized message after auth is initialized
+  if (!token) {
+    return <ErrorState type="unauthorized" message="Please log in to view profiles" />;
+  }
 
   if (loading) {
     return <ProfileSkeleton />;
   }
 
   if (error || !profileData) {
-    return <ErrorState type={errorType} message={error} />;
+    return <ErrorState type={errorType} message={error || undefined} />;
   }
+
+  const handleShare = () => {
+    navigator.clipboard.writeText(`${window.location.origin}/profile/${resolvedParams.id}`);
+    toast.success('Profile link copied to clipboard!');
+  };
+
+  const handleReport = () => {
+    if (!token || !profileData) {
+      toast.error('Authentication required');
+      return;
+    }
+  };
 
   const formattedProfileData = {
     username: profileData.username,
@@ -153,7 +162,7 @@ export default function ProfileIdPage({ params }: { params: Promise<{ id: string
       <div className="relative">
         <ProfileHeader {...formattedProfileData} readOnly />
         <div className="absolute top-4 right-4">
-          <DropdownMenu>
+          <DropdownMenu open={isDropdownOpen} onOpenChange={setIsDropdownOpen}>
             <DropdownMenuTrigger asChild>
               <Button 
                 variant="ghost" 
@@ -168,6 +177,7 @@ export default function ProfileIdPage({ params }: { params: Promise<{ id: string
                 className="gap-2 cursor-pointer"
                 onSelect={(e) => {
                   e.preventDefault();
+                  setIsDropdownOpen(false);
                   setIsReportDialogOpen(true);
                 }}
               >

@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import axios from 'axios';
+import { MiniCommunityCard } from './MiniCommunityCard';
 
 interface Community {
   _id: string;
@@ -55,47 +55,19 @@ export function RightSidebar() {
           Top Communities
         </h2>
         
-        <div className="space-y-3">
+        <div className="flex flex-col gap-1 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 10rem)' }}>
           {loading ? (
             <div className="text-center text-foreground-subtle">Loading communities...</div>
           ) : communities.length === 0 ? (
             <div className="text-center text-foreground-subtle">No communities found</div>
           ) : (
             communities.map((community) => (
-              <div
+              <MiniCommunityCard
                 key={community._id}
-                className="group relative rounded-xl hover:bg-background-muted transition-all duration-200"
-              >
-                <Link
-                  href={`/communities/${community._id}`}
-                  className="block p-3"
-                >
-                  <div className="flex items-start gap-3">
-                    <Avatar className="h-12 w-12 rounded-lg ring-1 ring-border/50">
-                      <AvatarImage 
-                        src={community.avatar} 
-                        alt={community.name} 
-                        className="object-cover" 
-                      />
-                      <AvatarFallback className="text-xs font-medium bg-background-muted text-foreground-muted">
-                        {community.name.slice(0, 2).toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-medium text-sm text-secondary group-hover:text-secondary/90 transition-colors duration-200">
-                        {community.name}
-                      </h3>
-                      <p className="text-xs text-foreground-subtle mt-0.5 flex items-center gap-1.5">
-                        <span className="inline-block h-1.5 w-1.5 rounded-full bg-primary/30"></span>
-                        {community.memberCount.toLocaleString()} members
-                      </p>
-                      <p className="text-xs text-foreground-subtle mt-0.5">
-                        {community.postCount.toLocaleString()} posts
-                      </p>
-                    </div>
-                  </div>
-                </Link>
-              </div>
+                community={community}
+                variant="list"
+                compact
+              />
             ))
           )}
         </div>

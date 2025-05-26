@@ -49,7 +49,7 @@ interface Notification {
 }
 
 export default function NotificationsPage() {
-  const { token, user } = useAuth();
+  const { token } = useAuth();
   const router = useRouter();
   const { ref, inView } = useInView();
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -117,7 +117,7 @@ export default function NotificationsPage() {
       fetchNotifications(nextPage);
       setPage(nextPage);
     }
-  }, [inView, hasMore, isLoading, token, fetchNotifications]);
+  }, [inView, hasMore, isLoading, token, fetchNotifications, page]);
 
   const markNotificationAsRead = async (notificationId: string) => {
     try {

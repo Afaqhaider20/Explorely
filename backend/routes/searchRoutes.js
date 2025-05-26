@@ -17,7 +17,6 @@ router.get('/', async (req, res) => {
         const results = {
             posts: [],
             communities: []
-            // Removed users array from results
         };
 
         // Normalize search type and prepare regex pattern for partial matching
@@ -73,7 +72,7 @@ router.get('/', async (req, res) => {
         if (searchType === 'all' || searchType === 'communities') {
             // Use text search first
             const textSearchCommunities = await Community.find({ $text: { $search: query } })
-                .select('name description avatar memberCount')
+                .select('_id name description avatar')
                 .sort({ score: { $meta: 'textScore' } })
                 .limit(8)
                 .lean();
@@ -86,18 +85,28 @@ router.get('/', async (req, res) => {
                 ],
                 _id: { $nin: textSearchCommunities.map(comm => comm._id) } // Exclude communities already found
             })
-                .select('name description avatar members')
+                .select('_id name description avatar')
                 .limit(5)
                 .lean();
+            
+            // Combine all communities
+            const allCommunities = [...textSearchCommunities, ...regexSearchCommunities];
+            
+            // Add post count and member count to each community
+            const communitiesWithCounts = await Promise.all(allCommunities.map(async community => {
+                const [postCount, memberCount] = await Promise.all([
+                    Post.countDocuments({ community: community._id }),
+                    Community.findById(community._id).select('members').then(comm => comm?.members?.length || 0)
+                ]);
                 
-            // Add member count to communities from regex search
-            const communitiesWithMemberCount = regexSearchCommunities.map(community => ({
-                ...community,
-                memberCount: community.members ? community.members.length : 0,
-                members: undefined // Remove members array
+                return {
+                    ...community,
+                    postCount,
+                    memberCount
+                };
             }));
                 
-            results.communities = [...textSearchCommunities, ...communitiesWithMemberCount];
+            results.communities = communitiesWithCounts;
         }
 
         // Removed users search completely

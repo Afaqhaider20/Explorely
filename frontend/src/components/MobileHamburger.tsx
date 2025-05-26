@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { Menu, Newspaper, Compass, Star, Map as MapIcon, Plus, UserPlus } from 'lucide-react';
+import { Menu, Newspaper, Compass, Star, Map as MapIcon, Plus, UserPlus, LucideIcon } from 'lucide-react';
 import {
   Sheet,
   SheetContent,
@@ -21,7 +21,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 interface NavItem {
   href: string;
   label: string;
-  icon: any;
+  icon: LucideIcon;
 }
 
 const publicNavItems: NavItem[] = [

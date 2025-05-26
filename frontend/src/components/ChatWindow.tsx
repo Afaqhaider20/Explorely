@@ -1,5 +1,4 @@
 import { useRef, useEffect } from "react";
-import { cn } from "@/lib/utils";
 import { format, isToday, isYesterday } from "date-fns";
 import { Message } from "./Message";
 

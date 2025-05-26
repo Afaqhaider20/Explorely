@@ -191,12 +191,6 @@ export function SignInDialog({ trigger, onSwitchToSignUp, open, onOpenChange, on
                     <Label htmlFor="password" className="text-sm font-medium">
                       Password
                     </Label>
-                    <Button 
-                      variant="link" 
-                      className="px-0 text-sm font-normal text-muted-foreground hover:text-primary transition-colors"
-                    >
-                      Forgot password?
-                    </Button>
                   </div>
                   <div className="relative">
                     <Input
