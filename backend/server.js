@@ -3,8 +3,6 @@ const express = require("express");
 const cors = require("cors");
 const cookieParser = require('cookie-parser');
 const connectDB = require("./config/db");
-const mongoose = require('mongoose');
-const { Server } = require('socket.io');
 
 
 // Import routes
