@@ -4,9 +4,7 @@ const cors = require("cors");
 const cookieParser = require('cookie-parser');
 const connectDB = require("./config/db");
 const mongoose = require('mongoose');
-const { createServer } = require('http');
 const { Server } = require('socket.io');
-const geoip = require('geoip-lite');
 
 
 // Import routes
@@ -73,18 +71,6 @@ app.use('/api/community-itineraries', communityItineraryDetailsRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/reports', reportRoutes);
-
-app.use((req, res, next) => {
-    const ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
-    const geo = geoip.lookup(ip);
-  
-    console.log("User IP:", ip);
-    console.log("User location:", geo);
-  
-    req.userLocation = geo;
-  
-    next();
-  });
 
 // Create HTTP server (needed for socket.io)
 const server = require('http').createServer(app);

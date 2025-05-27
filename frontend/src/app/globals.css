@@ -6,6 +6,19 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+/* Prevent zoom on input fields for mobile devices */
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="number"],
+input[type="search"],
+input[type="tel"],
+input[type="url"],
+textarea {
+  font-size: 16px !important; /* This prevents zoom on iOS */
+  max-height: 999999px; /* This prevents zoom on Android */
+}
+
 @layer base {
   :root {
     --background: 0 0% 100%;
