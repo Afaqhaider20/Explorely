@@ -163,6 +163,7 @@ module.exports = (server) => {
 
           // If user is online, send them the last message update
           if (userSocketId) {
+            console.log(`📨 Sending unread_last_message_update to user ${userSocketId}`);
             io.to(userSocketId).emit('unread_last_message_update', {
               communityId,
               lastMessage: {

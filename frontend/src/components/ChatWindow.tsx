@@ -1,6 +1,7 @@
 import { useRef, useEffect } from "react";
 import { format, isToday, isYesterday } from "date-fns";
 import { Message } from "./Message";
+import { MessageSquare } from "lucide-react";
 
 interface ChatMessage {
   _id: string;
@@ -92,6 +93,16 @@ export function ChatWindow({
   }
 
   const messageGroups = groupMessagesByDate();
+
+  if (messageGroups.length === 0) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground p-4 text-center">
+        <MessageSquare className="h-12 w-12 mb-4 opacity-50" />
+        <p className="text-lg font-medium">No messages yet</p>
+        <p className="text-sm max-w-md">Be the first one to start the conversation!</p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 overflow-y-auto p-4" ref={messagesContainerRef}>

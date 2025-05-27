@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/store/AuthContext";
-import { Users, MessageSquare, Send, Search, ChevronLeft, Smile, Image as ImageIcon, X } from "lucide-react";
+import { Users, MessageSquare, Send, Search, ChevronLeft, Smile } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useSocket } from "@/hooks/useSocket";
 import axios from "axios";
@@ -15,7 +15,6 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { ChatWindow } from "@/components/ChatWindow";
 import EmojiPicker, { EmojiClickData } from 'emoji-picker-react';
-import Image from "next/image";
 
 interface JoinedCommunity {
   _id: string;
@@ -84,7 +83,6 @@ export default function MessagesPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Track last processed message IDs for each community
-  const lastProcessedMessageIds = useRef<{ [communityId: string]: string }>({});
 
   // Check initial auth state
   useEffect(() => {
@@ -244,21 +242,33 @@ export default function MessagesPage() {
     console.log('Setting up message listeners');
 
     const handleNewMessage = (message: ChatMessage) => {
-      console.log('Received new message:', message);
+      console.log('=== New message received for chat window ===');
+      console.log('Message details:', {
+        id: message._id,
+        content: message.content,
+        isImage: message.isImage,
+        timestamp: message.timestamp,
+        sender: {
+          id: message.user._id,
+          username: message.user.username
+        },
+        community: message.community
+      });
+      console.log('Is message from current user:', message.user._id === user?._id);
+
       // Update messages list, replacing temporary message if it exists
       setMessages(prev => {
         // If this is our own message
         if (message.user._id === user?._id) {
-          console.log('Processing own message');
-          // Check if we already have this message
+          console.log('Processing own message - replacing temporary message');
+          // Check if we already have this message by ID
           const messageExists = prev.some(msg => 
-            msg.content === message.content && 
-            msg.user._id === message.user._id &&
-            !msg._id.startsWith('temp-')
+            msg._id === message._id || 
+            (msg._id.startsWith('temp-') && msg.content === message.content)
           );
 
           if (messageExists) {
-            console.log('Message already exists, skipping');
+            console.log('Message already exists in chat, skipping');
             return prev;
           }
 
@@ -270,18 +280,15 @@ export default function MessagesPage() {
         }
 
         console.log('Processing message from other user');
-        // For messages from other users
-        const messageExists = prev.some(msg => 
-          msg._id === message._id || 
-          (msg.content === message.content && msg.user._id === message.user._id)
-        );
+        // For messages from other users, only check message ID
+        const messageExists = prev.some(msg => msg._id === message._id);
 
         if (messageExists) {
-          console.log('Message already exists, skipping');
+          console.log('Message already exists in chat, skipping');
           return prev;
         }
 
-        console.log('Adding new message from other user');
+        console.log('Adding new message from other user to chat');
         return [...prev, message];
       });
       
@@ -322,7 +329,7 @@ export default function MessagesPage() {
         };
       };
     }) => {
-      console.log('=== Received unread_last_message_update ===');
+      console.log('=== New message update received for sidebar ===');
       console.log('Community ID:', data.communityId);
       console.log('Last Message:', {
         _id: data.lastMessage._id,
@@ -340,69 +347,49 @@ export default function MessagesPage() {
         const communityIndex = prev.findIndex(msg => msg.community._id === data.communityId);
         console.log('Community found in list:', communityIndex !== -1);
         
-        // Check if we've already processed this message for this community
-        if (lastProcessedMessageIds.current[data.communityId] === data.lastMessage._id) {
-          console.log('Duplicate message detected, skipping unread count increment.');
-          // Still update lastMessage and move to top
-          if (communityIndex === -1) {
-            return [{
-              community: { _id: data.communityId, name: '', avatar: '', description: '' }, 
-              lastMessage: {
-                ...data.lastMessage,
-                content: data.lastMessage.content === '' ? 'Image' : data.lastMessage.content
-              },
-              messageCount: 0, 
-              unreadCount: 1, // Start with 1 for new communities
-              lastRead: new Date().toISOString() 
-            }, ...prev];
-          }
-          const updated = [...prev];
-          const [updatedCommunity] = updated.splice(communityIndex, 1);
-          updatedCommunity.lastMessage = {
+        // Create updated community data
+        const updatedCommunityData = {
+          community: communityIndex !== -1 ? prev[communityIndex].community : { 
+            _id: data.communityId, 
+            name: '', 
+            avatar: '', 
+            description: '' 
+          },
+          lastMessage: {
             ...data.lastMessage,
             content: data.lastMessage.content === '' ? 'Image' : data.lastMessage.content
-          };
-          return [updatedCommunity, ...updated];
-        }
-        // Mark this message as processed
-        lastProcessedMessageIds.current[data.communityId] = data.lastMessage._id;
-        
-        if (communityIndex === -1) {
-          console.log('Adding new community to list');
-          return [{
-            community: { _id: data.communityId, name: '', avatar: '', description: '' }, 
-            lastMessage: {
-              ...data.lastMessage,
-              content: data.lastMessage.content === '' ? 'Image' : data.lastMessage.content
-            },
-            messageCount: 0, 
-            unreadCount: 1, // Start with 1 for new communities
-            lastRead: new Date().toISOString() 
-          }, ...prev];
-        }
-        
-        // Create a new array without the updated community
-        const updated = [...prev];
-        const [updatedCommunity] = updated.splice(communityIndex, 1);
-        
-        // Update the community's data
-        updatedCommunity.lastMessage = {
-          ...data.lastMessage,
-          content: data.lastMessage.content === '' ? 'Image' : data.lastMessage.content
+          },
+          messageCount: communityIndex !== -1 ? prev[communityIndex].messageCount : 0,
+          unreadCount: 0,
+          lastRead: new Date().toISOString()
         };
-        const shouldIncrement = data.lastMessage.sender._id !== user?._id && selectedCommunity?._id !== data.communityId;
-        updatedCommunity.unreadCount = shouldIncrement 
-          ? (updatedCommunity.unreadCount || 0) + 1 
-          : updatedCommunity.unreadCount;
+
+        // Determine if we should increment unread count
+        const shouldIncrement = data.lastMessage.sender._id !== user?._id && 
+                              selectedCommunity?._id !== data.communityId;
         
+        if (shouldIncrement) {
+          updatedCommunityData.unreadCount = (communityIndex !== -1 ? prev[communityIndex].unreadCount : 0) + 1;
+        } else {
+          updatedCommunityData.unreadCount = communityIndex !== -1 ? prev[communityIndex].unreadCount : 0;
+        }
+
         console.log('Updated community data:', {
-          unreadCount: updatedCommunity.unreadCount,
+          communityId: updatedCommunityData.community._id,
+          unreadCount: updatedCommunityData.unreadCount,
           shouldIncrement,
-          lastMessage: updatedCommunity.lastMessage.content
+          lastMessage: updatedCommunityData.lastMessage.content
         });
-        
-        // Return the updated community at the beginning of the array
-        return [updatedCommunity, ...updated];
+
+        // If community exists, remove it and add updated version at the beginning
+        if (communityIndex !== -1) {
+          const updated = [...prev];
+          updated.splice(communityIndex, 1);
+          return [updatedCommunityData, ...updated];
+        }
+
+        // If community doesn't exist, add it at the beginning
+        return [updatedCommunityData, ...prev];
       });
     };
 
@@ -531,13 +518,7 @@ export default function MessagesPage() {
     }
   };
 
-  const handleRemoveImage = () => {
-    setSelectedImage(null);
-    setImagePreview(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
+  
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -838,27 +819,6 @@ export default function MessagesPage() {
               </div>
             )}
             <div className="p-3 md:p-4 border-t bg-card shrink-0">
-              {imagePreview && (
-                <div className="mb-3 relative">
-                  <div className="relative w-32 h-32 rounded-lg overflow-hidden border border-border">
-                    <Image
-                      src={imagePreview}
-                      alt="Preview"
-                      fill
-                      className="object-cover"
-                    />
-                    <Button
-                      type="button"
-                      variant="destructive"
-                      size="icon"
-                      className="absolute top-1 right-1 h-6 w-6"
-                      onClick={handleRemoveImage}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              )}
               <form onSubmit={handleSendMessage} className="flex items-center gap-2">
                 <div className="relative flex-1">
                   <Input
@@ -877,16 +837,6 @@ export default function MessagesPage() {
                       onChange={handleImageSelect}
                       className="hidden"
                     />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6"
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={!selectedCommunity || isChangingCommunity}
-                    >
-                      <ImageIcon className="h-4 w-4" />
-                    </Button>
                     <Button
                       type="button"
                       variant="ghost"
