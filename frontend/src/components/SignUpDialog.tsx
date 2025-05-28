@@ -41,7 +41,7 @@ export function SignUpDialog({
   onOpenChange,
   onSuccess 
 }: SignUpDialogProps) {
-  const { setAuth } = useAuth();
+  const { setAuth, updateUserLocation } = useAuth();
   const [error, setError] = useState<string>('');
   const [formData, setFormData] = useState<RegisterCredentials>({
     username: "",
@@ -100,6 +100,10 @@ export function SignUpDialog({
 
       if (data.status === 'success' && data.data) {
         setAuth(data.data.user, data.data.token);
+        
+        // Update user location after successful sign up
+        await updateUserLocation();
+        
         if (onOpenChange) onOpenChange(false);
         if (onSuccess) {
           onSuccess();

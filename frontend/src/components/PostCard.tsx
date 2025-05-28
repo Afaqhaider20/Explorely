@@ -3,7 +3,7 @@
 import { formatDistanceToNow, parseISO } from 'date-fns';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
-import { MessageSquare, ArrowBigUp, ArrowBigDown, Users, Share2, MoreHorizontal, Flag, Trash2, ZoomIn } from "lucide-react";
+import { MessageSquare, ArrowBigUp, ArrowBigDown, Users, Share2, MoreHorizontal, Flag, Trash2, ZoomIn, Hash } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import Image from "next/image";
@@ -60,6 +60,7 @@ export interface PostCardProps {
     upvotes: string[];
     downvotes: string[];
   };
+  tags?: string[];
   isDetailView?: boolean;
   onDelete?: () => void;
 }
@@ -74,6 +75,7 @@ export function PostCard({
   createdAt,
   voteCount,
   commentCount,
+  tags,
   isDetailView = false,
   onDelete
 }: PostCardProps) {
@@ -392,6 +394,18 @@ export function PostCard({
             </div>
           )}
         </div>
+        
+        {/* Tags Section: Only show if tags exist and are non-empty */}
+        {Array.isArray(tags) && tags.length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-2">
+            {tags.map((tag, idx) => (
+              <Badge key={idx} variant="secondary" className="flex items-center gap-1">
+                <Hash className="h-3 w-3" />
+                <span>{tag}</span>
+              </Badge>
+            ))}
+          </div>
+        )}
         
         {media && (
           <div

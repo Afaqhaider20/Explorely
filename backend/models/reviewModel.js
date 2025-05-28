@@ -22,6 +22,14 @@ const reviewSchema = new mongoose.Schema({
         required: [true, 'Please add a location'],
         trim: true
     },
+    userCity: {
+        type: String,
+        trim: true
+    },
+    userCountry: {
+        type: String,
+        trim: true
+    },
     category: {
         type: String,
         required: [true, 'Please add a category'],

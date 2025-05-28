@@ -3,9 +3,15 @@ const router = express.Router();
 const upload = require('../middleware/uploadMiddleware');
 const { protect } = require('../middleware/authMiddleware');
 const postController = require('../controllers/postController');
+const travelKeywords = require('../travelKeywords');
 
 // Create post with optional media
 router.post('/', protect, upload.single('media'), postController.createPost);
+
+// Get travel keywords
+router.get('/keywords', (req, res) => {
+    res.json({ keywords: travelKeywords });
+});
 
 // Get a post with comments (Public route)
 router.get('/:id', postController.getPost);

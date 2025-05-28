@@ -29,7 +29,7 @@ const formatPostResponse = (post, userId) => {
 // Create a post
 const createPost = async (req, res) => {
     try {
-        const { title, content, communityId } = req.body;
+        const { title, content, communityId, tags } = req.body;
 
         // Validate required fields
         if (!title || !content || !communityId) {
@@ -66,6 +66,25 @@ const createPost = async (req, res) => {
             mediaUrl = await uploadToCloudinary(req.file, 'explorely/posts');
         }
 
+        // --- TAGS FIX START ---
+        let parsedTags = [];
+        if (Array.isArray(tags)) {
+            parsedTags = tags.filter(tag => typeof tag === 'string' && tag.trim() !== '');
+        } else if (typeof tags === 'string') {
+            try {
+                const temp = JSON.parse(tags);
+                if (Array.isArray(temp)) {
+                    parsedTags = temp.filter(tag => typeof tag === 'string' && tag.trim() !== '');
+                } else if (typeof temp === 'string' && temp.trim() !== '') {
+                    parsedTags = [temp];
+                }
+            } catch (e) {
+                // fallback: treat as comma-separated string
+                parsedTags = tags.split(',').map(t => t.trim()).filter(Boolean);
+            }
+        }
+        // --- TAGS FIX END ---
+
         // Create post with initialized votes
         const post = await Post.create({
             title,
@@ -73,6 +92,7 @@ const createPost = async (req, res) => {
             author: req.user._id,
             community: communityId,
             media: mediaUrl,
+            tags: parsedTags,
             votes: {
                 upvotes: [],
                 downvotes: []
@@ -213,19 +233,38 @@ const getHomeFeed = async (req, res) => {
 
         // If we're still within the range of joined communities' posts
         if (skip < joinedCommunitiesPostCount) {
-            posts = await Post.find({ community: { $in: user.joinedCommunities } })
-                .select('title content media voteCount createdAt updatedAt')
-                .populate('author', 'username avatar')
-                .populate('community', 'name')
-                .sort(currentSort)
-                .skip(skip)
-                .limit(limit)
-                .lean();
+            // Get posts from joined communities
+            posts = await Post.find({ 
+                community: { $in: user.joinedCommunities }
+            })
+            .select('title content media voteCount createdAt updatedAt')
+            .populate('author', 'username avatar')
+            .populate('community', 'name')
+            .sort(currentSort)
+            .skip(skip)
+            .limit(limit)
+            .lean();
 
             // If we got less posts than the limit, we need to fetch from other communities
             if (posts.length < limit) {
                 const remainingLimit = limit - posts.length;
-                const otherCommunitiesPosts = await Post.find({ community: { $nin: user.joinedCommunities } })
+                
+                // Keep track of post IDs we've already fetched
+                const fetchedPostIds = new Set(posts.map(post => post._id.toString()));
+                
+                // First, get user's recommendation keywords
+                const user = await User.findById(req.user._id).select('recommendationKeywords');
+                const userKeywords = user.recommendationKeywords || [];
+
+                // If user has recommendation keywords, first try to get posts with matching tags
+                let otherCommunitiesPosts = [];
+                if (userKeywords.length > 0) {
+                    // Find posts from other communities that have matching tags
+                    otherCommunitiesPosts = await Post.find({
+                        community: { $nin: user.joinedCommunities },
+                        tags: { $in: userKeywords },
+                        _id: { $nin: Array.from(fetchedPostIds) }
+                    })
                     .select('title content media voteCount createdAt updatedAt')
                     .populate('author', 'username avatar')
                     .populate('community', 'name')
@@ -233,28 +272,56 @@ const getHomeFeed = async (req, res) => {
                     .limit(remainingLimit)
                     .lean();
 
+                    // Update fetched post IDs
+                    otherCommunitiesPosts.forEach(post => fetchedPostIds.add(post._id.toString()));
+                }
+
+                // If we still need more posts, get remaining posts from other communities
+                if (otherCommunitiesPosts.length < remainingLimit) {
+                    const additionalLimit = remainingLimit - otherCommunitiesPosts.length;
+                    const additionalPosts = await Post.find({
+                        community: { $nin: user.joinedCommunities },
+                        _id: { $nin: Array.from(fetchedPostIds) }
+                    })
+                    .select('title content media voteCount createdAt updatedAt')
+                    .populate('author', 'username avatar')
+                    .populate('community', 'name')
+                    .sort(currentSort)
+                    .limit(additionalLimit)
+                    .lean();
+
+                    otherCommunitiesPosts = [...otherCommunitiesPosts, ...additionalPosts];
+                }
+
                 posts = [...posts, ...otherCommunitiesPosts];
-                message = 'Showing posts from your communities and top posts from other communities';
-            } else {
-                hasMore = joinedCommunitiesPostCount > skip + posts.length;
+                message = 'Showing posts from your communities and recommended posts from other communities';
             }
+            
+            // Calculate hasMore based on whether we've shown all joined communities' posts
+            hasMore = skip + posts.length < joinedCommunitiesPostCount;
         } else {
             // We've exhausted joined communities' posts, show posts from other communities
             const otherCommunitiesSkip = skip - joinedCommunitiesPostCount;
-            posts = await Post.find({ community: { $nin: user.joinedCommunities } })
-                .select('title content media voteCount createdAt updatedAt')
-                .populate('author', 'username avatar')
-                .populate('community', 'name')
-                .sort(currentSort)
-                .skip(otherCommunitiesSkip)
-                .limit(limit)
-                .lean();
+            
+            // Get posts from other communities
+            posts = await Post.find({ 
+                community: { $nin: user.joinedCommunities }
+            })
+            .select('title content media voteCount createdAt updatedAt')
+            .populate('author', 'username avatar')
+            .populate('community', 'name')
+            .sort(currentSort)
+            .skip(otherCommunitiesSkip)
+            .limit(limit)
+            .lean();
 
+            // Get total count of posts from other communities for pagination
             const otherCommunitiesPostCount = await Post.countDocuments({
                 community: { $nin: user.joinedCommunities }
             });
 
-            hasMore = otherCommunitiesPostCount > otherCommunitiesSkip + posts.length;
+            // Calculate hasMore based on other communities' posts
+            hasMore = otherCommunitiesSkip + posts.length < otherCommunitiesPostCount;
             message = 'Showing top posts from other communities';
         }
 
@@ -494,6 +561,29 @@ const handleUpvote = async (req, res) => {
             post.votes.upvotes.push(userId);
             if (isDownvoted) {
                 post.votes.downvotes = post.votes.downvotes.filter(id => id.toString() !== userId.toString());
+            }
+
+            // Add post tags to user's recommendation keywords if they exist
+            if (post.tags && post.tags.length > 0) {
+                const user = await User.findById(userId);
+                if (user) {
+                    // Filter out tags that are already in user's recommendation keywords
+                    const newTags = post.tags.filter(tag => !user.recommendationKeywords.includes(tag));
+                    
+                    // Add new tags to user's recommendation keywords
+                    if (newTags.length > 0) {
+                        // Calculate how many items we need to remove from the end
+                        const totalLength = user.recommendationKeywords.length + newTags.length;
+                        const itemsToRemove = Math.max(0, totalLength - 20);
+                        
+                        // Remove items from the end if needed
+                        const updatedKeywords = user.recommendationKeywords.slice(0, -itemsToRemove);
+                        
+                        // Add new tags at the beginning
+                        user.recommendationKeywords = [...newTags, ...updatedKeywords];
+                        await user.save();
+                    }
+                }
             }
 
             // Create notification if it's not a self-upvote

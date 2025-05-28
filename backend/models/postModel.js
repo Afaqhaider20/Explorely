@@ -25,6 +25,10 @@ const postSchema = new mongoose.Schema({
     media: {
         type: String
     },
+    tags: [{
+        type: String,
+        trim: true
+    }],
     votes: {
         upvotes: [{ 
             type: mongoose.Schema.Types.ObjectId, 

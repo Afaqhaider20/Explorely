@@ -14,10 +14,25 @@ router.get('/', async (req, res) => {
       .select('name description avatar members')
       .lean();
 
-    // Transform communities to include memberCount
+    // Get post counts for each community
+    const communityIds = trendingCommunities.map(community => community._id);
+    const postCounts = await Post.aggregate([
+      { $match: { community: { $in: communityIds } } },
+      { $group: { _id: '$community', count: { $sum: 1 } } }
+    ]);
+
+    // Create a map of community ID to post count
+    const postCountMap = postCounts.reduce((acc, curr) => {
+      acc[curr._id.toString()] = curr.count;
+      return acc;
+    }, {});
+
+    // Transform communities to include memberCount, avatar, and postCount
     const transformedCommunities = trendingCommunities.map(community => ({
       ...community,
       memberCount: community.members.length,
+      avatar: community.avatar,
+      postCount: postCountMap[community._id.toString()] || 0,
       members: undefined
     }));
 

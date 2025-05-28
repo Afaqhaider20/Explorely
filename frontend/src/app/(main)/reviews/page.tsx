@@ -42,7 +42,7 @@ interface ReviewData {
 }
 
 export default function ReviewsPage() {
-  const { token, isAuthenticated } = useAuth();
+  const { token, isAuthenticated, user } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -169,6 +169,11 @@ export default function ReviewsPage() {
       formData.append('category', data.category);
       formData.append('rating', data.rating.toString());
       
+      if (user?.location) {
+        formData.append('userCity', user.location.city);
+        formData.append('userCountry', user.location.country);
+      }
+      
       if (data.images) {
         Array.from(data.images).forEach(file => {
           formData.append('images', file);
@@ -237,9 +242,16 @@ export default function ReviewsPage() {
                 <Star className="h-6 w-6 md:h-7 md:w-7 text-yellow-500 animate-pulse" fill="currentColor" />
                 Reviews
               </h1>
-              <p className="text-muted-foreground text-base md:text-lg max-w-md">
-                Explore and share authentic experiences from your travels
-              </p>
+              <div className="space-y-1">
+                <p className="text-muted-foreground text-base md:text-lg max-w-md">
+                  Explore and share authentic experiences from your travels
+                </p>
+                {isAuthenticated && user?.location && (
+                  <p className="text-sm text-muted-foreground/80">
+                    Your location: {user.location.city}, {user.location.country.toUpperCase()}
+                  </p>
+                )}
+              </div>
             </div>
             <CreateReviewDialog
               onSubmit={handleCreateReview}

@@ -39,7 +39,7 @@ interface SignInResponse {
 }
 
 export function SignInDialog({ trigger, onSwitchToSignUp, open, onOpenChange, onSuccess }: SignInDialogProps) {
-  const { setAuth } = useAuth();
+  const { setAuth, updateUserLocation } = useAuth();
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false);
@@ -78,6 +78,9 @@ export function SignInDialog({ trigger, onSwitchToSignUp, open, onOpenChange, on
           }))
         };
         setAuth(transformedUser, token);
+        
+        // Update user location after successful sign in
+        await updateUserLocation();
         
         if (onOpenChange) {
           onOpenChange(false);

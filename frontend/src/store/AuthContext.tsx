@@ -8,6 +8,10 @@ export interface User {
   email: string;
   avatar: string;
   joinedCommunities: JoinedCommunity[]; // Change this to array of JoinedCommunity
+  location?: {
+    city: string;
+    country: string;
+  };
 }
 
 export interface JoinedCommunity {
@@ -33,6 +37,7 @@ interface AuthContextType {
   isInitialized: boolean;
   isAuthenticated: boolean;
   refreshToken: () => Promise<void>;
+  updateUserLocation: () => Promise<void>;
 }
 
 interface AuthState {
@@ -109,6 +114,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [authState.token, logout]);
 
+  const updateUserLocation = useCallback(async () => {
+    try {
+      console.log('Attempting to fetch user location...');
+      const response = await fetch('https://ipinfo.io/json');
+      const data = await response.json();
+      
+      if (data.city && data.country) {
+        console.log('Location updated successfully:', { city: data.city, country: data.country });
+        setAuthState(prev => {
+          if (!prev.user) return prev;
+          
+          const updatedUser = {
+            ...prev.user,
+            location: {
+              city: data.city,
+              country: data.country // This will be the country code (e.g., "PK")
+            }
+          };
+
+          // Update localStorage
+          localStorage.setItem('auth', JSON.stringify({
+            user: updatedUser,
+            token: prev.token
+          }));
+
+          return {
+            ...prev,
+            user: updatedUser
+          };
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching location:', error);
+    }
+  }, []);
+
   useEffect(() => {
     console.log('Initializing auth state...');
     // Check for token in localStorage on mount
@@ -122,6 +163,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         
         // Store token in cookie for middleware access with 1 day expiration
         document.cookie = `token=${parsedAuth.token}; path=/; SameSite=Lax; max-age=86400`;
+        
+        // If user is authenticated but doesn't have location, fetch it
+        if (parsedAuth.user && !parsedAuth.user.location) {
+          updateUserLocation();
+        }
         
         setAuthState({
           user: parsedAuth.user,
@@ -183,7 +229,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isInitialized: true,
       });
     }
-  }, [refreshToken]);
+  }, [refreshToken, updateUserLocation]);
 
   const setAuth = (user: User, token: string) => {
     const authData = { user, token };
@@ -265,7 +311,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       removeJoinedCommunity,
       isInitialized: authState.isInitialized,
       isAuthenticated: authState.isAuthenticated,
-      refreshToken
+      refreshToken,
+      updateUserLocation
     }}>
       {children}
     </AuthContext.Provider>

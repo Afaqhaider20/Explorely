@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { PostCard } from "@/components/PostCard";
-import { ExploreSection, CommunityCard } from "@/components/ExploreSection";
+import { ExploreSection } from "@/components/ExploreSection";
+import { MiniCommunityCard } from "@/components/MiniCommunityCard";
 import { useAuth } from "@/store/AuthContext";
 import axios from "axios";
 import { toast } from "sonner";
@@ -14,8 +15,9 @@ interface TrendingCommunity {
   _id: string;
   name: string;
   memberCount: number;
-  image: string;
+  avatar: string;
   description: string;
+  postCount: number;
   tags: string[];
 }
 
@@ -153,18 +155,19 @@ export default function ExplorePage() {
         title="Trending Communities"
         subtitle="Fast-growing communities to check out"
       >
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {trendingCommunities.map((community) => (
-            <CommunityCard 
+            <MiniCommunityCard 
               key={community._id}
               community={{
                 _id: community._id,
                 name: community.name,
-                members: community.memberCount,
-                image: community.image,
                 description: community.description,
-                tags: community.tags
+                avatar: community.avatar,
+                memberCount: community.memberCount,
+                postCount: community.postCount
               }}
+              variant="list"
             />
           ))}
         </div>

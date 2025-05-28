@@ -1,38 +1,31 @@
-"use client"
-
-import { useState, useEffect } from "react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { Button } from "@/components/ui/button"
-import { Label } from "@/components/ui/label"
-import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
-import { ImagePlus, Loader2, X, Hash } from "lucide-react"
+import { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { ImagePlus, Loader2, X, Hash, ChevronDown, ChevronUp } from "lucide-react";
 import { useAuth } from '@/store/AuthContext';
-import { toast } from "sonner"
-import Image from "next/image"
-import { getApiUrl } from "@/lib/config"
-import { Badge } from "@/components/ui/badge"
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { toast } from "sonner";
+import Image from "next/image";
+import { getApiUrl } from "@/lib/config";
+import { Badge } from "@/components/ui/badge";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
-interface CreatePostDialogProps {
+interface ExpandableCreatePostProps {
   communityId: string;
-  communityName: string;
-  trigger?: React.ReactNode;
   onPostCreated?: () => void;
 }
 
 const MAX_TITLE_LENGTH = 100;
 const MAX_CONTENT_LENGTH = 2000;
-const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png']; // Remove webp
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png'];
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
 const MAX_TAGS = 5;
-
-// Add orientation type
 type ImageOrientation = 'portrait' | 'landscape' | 'square' | null;
 
-export function CreatePostDialog({ communityId, communityName, trigger, onPostCreated }: CreatePostDialogProps) {
-  const [open, setOpen] = useState(false);
+export function ExpandableCreatePost({ communityId, onPostCreated }: ExpandableCreatePostProps) {
+  const [expanded, setExpanded] = useState(false);
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [media, setMedia] = useState<File | null>(null);
@@ -45,7 +38,6 @@ export function CreatePostDialog({ communityId, communityName, trigger, onPostCr
   const [tagSearchOpen, setTagSearchOpen] = useState(false);
   const [tagSearchValue, setTagSearchValue] = useState("");
 
-  // Fetch travel keywords
   useEffect(() => {
     const fetchKeywords = async () => {
       try {
@@ -63,20 +55,14 @@ export function CreatePostDialog({ communityId, communityName, trigger, onPostCr
   const handleMediaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
-    console.log('Selected file type:', file.type); // Debug log
-
     if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
       toast.error("Please upload a JPG or PNG image only");
       return;
     }
-
     if (file.size > MAX_IMAGE_SIZE) {
       toast.error("Image must be less than 5MB");
       return;
     }
-
-    // Read image dimensions to determine orientation
     const url = URL.createObjectURL(file);
     const img = new window.Image();
     img.onload = () => {
@@ -124,29 +110,29 @@ export function CreatePostDialog({ communityId, communityName, trigger, onPostCr
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     if (!title.trim()) {
       toast.error("Title is required");
       return;
     }
-
     if (!content.trim()) {
       toast.error("Content is required");
       return;
     }
-
     setLoading(true);
     try {
       const formData = new FormData();
       formData.append('title', title.trim());
       formData.append('content', content.trim());
       formData.append('communityId', communityId);
-      formData.append('tags', JSON.stringify(tags));
-      
+      if (tags.length > 0) {
+        formData.append('tags', JSON.stringify(tags));
+        console.log('Sending tags with request:', tags);
+      } else {
+        console.log('No tags being sent with request');
+      }
       if (media) {
         formData.append('media', media);
       }
-
       const response = await fetch(getApiUrl('api/posts'), {
         method: 'POST',
         headers: {
@@ -154,22 +140,16 @@ export function CreatePostDialog({ communityId, communityName, trigger, onPostCr
         },
         body: formData,
       });
-
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.message || 'Failed to create post');
       }
-
       toast.success('Post created successfully!');
-      setOpen(false);
-      
-      // Reset form
+      setExpanded(false);
       setTitle('');
       setContent('');
       setTags([]);
       removeMedia();
-      
-      // Callback to refresh posts
       onPostCreated?.();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to create post');
@@ -179,14 +159,24 @@ export function CreatePostDialog({ communityId, communityName, trigger, onPostCr
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="max-w-[95vw] w-full min-w-[320px] sm:max-w-md px-4 py-6 sm:px-8 sm:py-8 max-h-[90vh] overflow-y-auto">
-        <DialogHeader className="space-y-3">
-          <DialogTitle className="text-xl font-semibold">Create Post in {communityName}</DialogTitle>
-        </DialogHeader>
-
-        <form onSubmit={handleSubmit} className="space-y-6">
+    <div className="w-full max-w-2xl mx-auto mb-6">
+      <Button
+        variant="outline"
+        className="w-full py-8 border-2 border-dashed bg-muted/50 hover:bg-muted/80 hover:border-solid transition-all duration-200 group flex items-center justify-center gap-3"
+        onClick={() => setExpanded((prev) => !prev)}
+        aria-expanded={expanded}
+      >
+        <div className="flex items-center gap-3">
+          <div className="rounded-full bg-background p-2 shadow-sm group-hover:scale-110 transition-transform duration-200">
+            {expanded ? <ChevronUp className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors" /> : <ChevronDown className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors" />}
+          </div>
+          <span className="text-muted-foreground group-hover:text-foreground font-medium">
+            {expanded ? 'Hide Post Form' : 'Create a Post'}
+          </span>
+        </div>
+      </Button>
+      {expanded && (
+        <form onSubmit={handleSubmit} className="space-y-6 mt-6 bg-background border rounded-xl p-6 shadow-lg">
           <div className="space-y-3">
             <Label htmlFor="title" className="text-sm font-medium">Title</Label>
             <div className="relative">
@@ -254,12 +244,15 @@ export function CreatePostDialog({ communityId, communityName, trigger, onPostCr
                     {tags.length >= MAX_TAGS ? 'Maximum tags reached' : 'Add tags...'}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-[300px] p-0 z-50" align="start" forceMount>
-                  <Command>
+                <PopoverContent className="w-[300px] p-0 z-50" align="start">
+                  <Command className="rounded-lg border shadow-md">
                     <CommandInput
                       placeholder="Search tags..."
                       value={tagSearchValue}
-                      onValueChange={setTagSearchValue}
+                      onValueChange={(value) => {
+                        console.log('Search value:', value);
+                        setTagSearchValue(value);
+                      }}
                     />
                     <CommandEmpty>No tags found.</CommandEmpty>
                     <CommandGroup className="max-h-[200px] overflow-auto">
@@ -271,8 +264,10 @@ export function CreatePostDialog({ communityId, communityName, trigger, onPostCr
                         .map((keyword) => (
                           <CommandItem
                             key={keyword}
-                            onSelect={() => handleTagSelect(keyword)}
-                            onClick={() => handleTagSelect(keyword)}
+                            onSelect={() => {
+                              console.log('Tag clicked:', keyword);
+                              handleTagSelect(keyword);
+                            }}
                           >
                             <Hash className="mr-2 h-4 w-4" />
                             {keyword}
@@ -337,7 +332,7 @@ export function CreatePostDialog({ communityId, communityName, trigger, onPostCr
             <Button 
               type="button" 
               variant="outline" 
-              onClick={() => setOpen(false)}
+              onClick={() => setExpanded(false)}
               className="w-full sm:w-auto"
             >
               Cancel
@@ -358,7 +353,7 @@ export function CreatePostDialog({ communityId, communityName, trigger, onPostCr
             </Button>
           </div>
         </form>
-      </DialogContent>
-    </Dialog>
+      )}
+    </div>
   );
-}
+} 

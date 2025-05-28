@@ -111,8 +111,93 @@ textarea {
     );
     background-size: 30px 30px;
   }
-  
-  /* Remove the custom rdp styles that were added before */
+}
+
+/* Command component styles */
+[cmdk-root] {
+  max-width: 640px;
+  width: 100%;
+  background: hsl(var(--popover));
+  color: hsl(var(--popover-foreground));
+  border-radius: var(--radius);
+  overflow: hidden;
+  padding: 0;
+  font-family: var(--font-sans);
+  box-shadow: 0 16px 70px rgb(0 0 0 / 20%);
+}
+
+[cmdk-input] {
+  font-family: var(--font-sans);
+  width: 100%;
+  font-size: 16px;
+  padding: 8px 8px;
+  outline: none;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid hsl(var(--border));
+  margin: 0;
+  border-radius: 0;
+  color: hsl(var(--foreground));
+}
+
+[cmdk-input]::placeholder {
+  color: hsl(var(--muted-foreground));
+}
+
+[cmdk-list] {
+  height: min(330px, calc(var(--cmdk-list-height)));
+  max-height: 400px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  transition: 100ms ease;
+  transition-property: height;
+}
+
+[cmdk-item] {
+  content-visibility: auto;
+  cursor: pointer;
+  height: 40px;
+  border-radius: 8px;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px;
+  color: hsl(var(--foreground));
+  user-select: none;
+  will-change: background, color;
+  transition: all 150ms ease;
+  transition-property: none;
+}
+
+[cmdk-item][data-selected="true"] {
+  background: hsl(var(--accent));
+  color: hsl(var(--accent-foreground));
+}
+
+[cmdk-item][data-disabled="true"] {
+  color: hsl(var(--muted-foreground));
+  cursor: not-allowed;
+}
+
+[cmdk-group-heading] {
+  user-select: none;
+  font-size: 12px;
+  color: hsl(var(--muted-foreground));
+  padding: 0 8px;
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+[cmdk-empty] {
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 64px;
+  white-space: pre-wrap;
+  color: hsl(var(--muted-foreground));
 }
 
 /* Hide scrollbar for Chrome, Safari and Opera */

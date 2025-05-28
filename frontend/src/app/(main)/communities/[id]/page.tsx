@@ -4,10 +4,10 @@ import { useEffect, useState, useCallback, use, useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { ScrollText, Users, Info, MessageSquare, Map, UserPlus, Shield, Loader2, Plus, Ban, ArrowLeft, Pencil, MoreHorizontal, Trash2, Share2, Flag } from "lucide-react";
+import { ScrollText, Users, Info, Map, UserPlus, Shield, Loader2, Plus, Ban, ArrowLeft, Pencil, MoreHorizontal, Trash2, Share2, Flag } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { CreatePostDialog } from "@/components/CreatePostDialog";
+import { ExpandableCreatePost } from "@/components/ExpandableCreatePost";
 import { useAuth } from '@/store/AuthContext';
 import { formatDistanceToNow, parseISO, isValid } from 'date-fns';
 import { toast } from 'sonner';
@@ -823,25 +823,8 @@ function CommunityPageClient({ id }: { id: string }) {
             </div>
 
             <TabsContent value="posts" className="space-y-6">
-              <CreatePostDialog
+              <ExpandableCreatePost
                 communityId={community._id}
-                communityName={community.name}
-                trigger={
-                  <Button 
-                    variant="outline" 
-                    className="w-full py-8 border-2 border-dashed bg-muted/50 hover:bg-muted/80 hover:border-solid 
-                      transition-all duration-200 group flex items-center justify-center gap-3"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="rounded-full bg-background p-2 shadow-sm group-hover:scale-110 transition-transform duration-200">
-                        <MessageSquare className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors" />
-                      </div>
-                      <span className="text-muted-foreground group-hover:text-foreground font-medium">
-                        Create a Post
-                      </span>
-                    </div>
-                  </Button>
-                }
                 onPostCreated={() => {
                   fetchPosts(1, false); // Refresh posts from first page
                 }}

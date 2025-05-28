@@ -36,7 +36,6 @@ interface ReviewCardProps {
   _id: string;
   title: string;
   content: string;
-  location: string;
   category: string;
   rating: number;
   images: string[];
@@ -54,7 +53,6 @@ export function ReviewCard({
   _id,
   title,
   content,
-  location,
   category,
   rating,
   images,
@@ -207,8 +205,6 @@ export function ReviewCard({
                 {author.username}
               </Link>
               <div className="flex flex-wrap items-center gap-1 sm:gap-2 text-xs text-muted-foreground mt-0.5">
-                <span className="font-medium">{location}</span>
-                <span className="hidden xs:inline">•</span>
                 <span className="text-primary/80">{category}</span>
               </div>
             </div>

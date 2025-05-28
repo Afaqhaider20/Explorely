@@ -21,7 +21,7 @@ const formatReviewResponse = (review) => {
 // Create a review
 const createReview = async (req, res) => {
     try {
-        const { title, content, location, category, rating } = req.body;
+        const { title, content, location, category, rating, userCity, userCountry } = req.body;
 
         // Validate required fields
         if (!title || !content || !location || !category || !rating) {
@@ -48,7 +48,9 @@ const createReview = async (req, res) => {
             rating,
             author: req.user._id,
             images: imageUrls,
-            likes: []
+            likes: [],
+            userCity,
+            userCountry
         });
 
         // Get populated review

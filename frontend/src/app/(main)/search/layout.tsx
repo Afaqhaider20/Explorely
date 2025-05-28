@@ -6,7 +6,7 @@ export default function SearchLayout({
   children: React.ReactNode
 }) {
   return (
-    <div className="min-h-screen pt-[4rem]">
+    <div className="min-h-screen">
       <Suspense fallback={<span>Loading...</span>}>
         {children}
       </Suspense>
