@@ -34,40 +34,44 @@ const registerUser = async (req, res) => {
             });
         }
 
-        // Hash password
-        const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash(password, salt);
-
-        // Create user
+        // Create user - password will be hashed by the pre-save middleware
         const user = await User.create({
             username,
             name,
             email,
-            password: hashedPassword,
-            bio: "New traveler exploring the world with Explorely!" // Set default bio
+            password,
+            bio: "New traveler exploring the world with Explorely!"
         });
 
-        if (user) {
-            const populatedUser = await User.findById(user._id)
-                .select('username email avatar bio joinedCommunities') // Removed bio
-                .populate('joinedCommunities', 'name avatar')
-                .lean();
-
-            res.status(201).json({
-                status: 'success',
-                data: {
-                    user: {
-                        _id: populatedUser._id,
-                        username: populatedUser.username,
-                        email: populatedUser.email,
-                        avatar: populatedUser.avatar,
-                        joinedCommunities: []
-                    },
-                    token: generateToken(user._id)
-                }
-            });
+        // Verify the stored password
+        const storedUser = await User.findById(user._id);
+        const passwordVerification = await storedUser.matchPassword(password);
+        
+        if (!passwordVerification) {
+            await User.findByIdAndDelete(user._id);
+            throw new Error('Password verification failed after storage');
         }
+
+        const populatedUser = await User.findById(user._id)
+            .select('username email avatar bio joinedCommunities')
+            .populate('joinedCommunities', 'name avatar')
+            .lean();
+
+        res.status(201).json({
+            status: 'success',
+            data: {
+                user: {
+                    _id: populatedUser._id,
+                    username: populatedUser.username,
+                    email: populatedUser.email,
+                    avatar: populatedUser.avatar,
+                    joinedCommunities: populatedUser.joinedCommunities || []
+                },
+                token: generateToken(populatedUser._id)
+            }
+        });
     } catch (error) {
+        console.error('Registration error:', error);
         res.status(500).json({ message: error.message });
     }
 };
@@ -80,36 +84,43 @@ const loginUser = async (req, res) => {
         // Check for user email
         const user = await User.findOne({ email });
 
-        if (user && (await bcrypt.compare(password, user.password))) {
-            // Check if user is banned
-            if (user.isBanned) {
-                return res.status(403).json({ 
-                    message: 'Your account has been banned. Please contact support for more information.' 
-                });
-            }
+        if (user) {
+            const isPasswordValid = await user.matchPassword(password);
 
-            const populatedUser = await User.findById(user._id)
-                .select('username email avatar bio joinedCommunities')
-                .populate('joinedCommunities', 'name avatar')
-                .lean();
-
-            res.status(200).json({
-                status: 'success',
-                data: {
-                    user: {
-                        _id: populatedUser._id,
-                        username: populatedUser.username,
-                        email: populatedUser.email,
-                        avatar: populatedUser.avatar,
-                        joinedCommunities: populatedUser.joinedCommunities || []
-                    },
-                    token: generateToken(user._id)
+            if (isPasswordValid) {
+                // Check if user is banned
+                if (user.isBanned) {
+                    return res.status(403).json({ 
+                        message: 'Your account has been banned. Please contact support for more information.' 
+                    });
                 }
-            });
+
+                const populatedUser = await User.findById(user._id)
+                    .select('username email avatar bio joinedCommunities')
+                    .populate('joinedCommunities', 'name avatar')
+                    .lean();
+
+                res.status(200).json({
+                    status: 'success',
+                    data: {
+                        user: {
+                            _id: populatedUser._id,
+                            username: populatedUser.username,
+                            email: populatedUser.email,
+                            avatar: populatedUser.avatar,
+                            joinedCommunities: populatedUser.joinedCommunities || []
+                        },
+                        token: generateToken(user._id)
+                    }
+                });
+            } else {
+                res.status(401).json({ message: 'Invalid credentials' });
+            }
         } else {
             res.status(401).json({ message: 'Invalid credentials' });
         }
     } catch (error) {
+        console.error('Login error:', error);
         res.status(500).json({ message: error.message });
     }
 };
